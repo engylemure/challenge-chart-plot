@@ -1,0 +1,30 @@
+div.DraftEditor-root {
+  border: 0.5px solid #000;
+  background-color: rgb(58, 60, 68);
+  overflow-y: auto;
+  color: #fff
+}
+div.DraftEditor-editorContainer,
+div.public-DraftEditor-content {
+  height: 100%;
+}
+
+.line {
+  position: relative;
+}
+
+.line::before {
+  content: attr(data-line-number);
+  position: absolute;
+  left: 0;
+  top: 0;
+  color: rgb(58, 60, 68);
+  text-align: end;
+  padding-right: 0.5em;
+  background-color: lightslategrey;
+  width: 2.5em;
+}
+
+.line-text {
+  margin-left: 1em;
+}
