@@ -1,35 +1,21 @@
-import React, { useState } from 'react';
-import {Editor, EditorState, EditorBlock, ContentState} from 'draft-js';
+import React from 'react';
+import { ControlledEditor } from "@monaco-editor/react";
 import './DataEditor.css';
 
-const Line = (props: any) => {
-  const { block, contentState } = props
-  const lineNumber = (contentState as ContentState)
-    .getBlockMap()
-    .toList()
-    .findIndex((item: any) => (item.key === block.key)) + 1;
-  return (
-    <div  className="line" data-line-number={lineNumber}>
-      <div className="line-text">
-      <EditorBlock {...props} />
-      </div>
-    </div>
-  );
+interface DataEditorProps {
+  height?: string | number | undefined
 }
+const DataEditor = ({ height = "50vh" }: DataEditorProps) => {
+  const handleEditorChange = (ev: any, value: string | undefined) => {
+    return value;
+  }
 
-const blockRendererFunction = () => ({
-  component: Line,
-})
-
-const DataEditor = (props: any) => {
-  const [editorState, setEditorState] = useState(EditorState.createEmpty())
   return (
-    <Editor 
-      editorState={editorState}
-      onChange={setEditorState}
-      blockRendererFn={blockRendererFunction}
-      textAlignment={undefined}
-      textDirectionality='LTR'
+    <ControlledEditor
+      theme="dark"
+      height={height}
+      onChange={handleEditorChange}
+      language="javascript"
     />
   );
 }
