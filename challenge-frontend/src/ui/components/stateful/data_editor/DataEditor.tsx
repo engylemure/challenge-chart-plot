@@ -1,21 +1,19 @@
 import React from 'react';
-import { ControlledEditor } from "@monaco-editor/react";
+import {ControlledEditor, ControlledEditorOnChange } from "@monaco-editor/react";
 import './DataEditor.css';
 
 interface DataEditorProps {
-  height?: string | number | undefined
+  height?: string | number | undefined,
+  handleEditorChange?: ControlledEditorOnChange | undefined
 }
-const DataEditor = ({ height = "50vh" }: DataEditorProps) => {
-  const handleEditorChange = (ev: any, value: string | undefined) => {
-    return value;
-  }
 
+const DataEditor = ({ height = "50vh", handleEditorChange }: DataEditorProps) => {
   return (
     <ControlledEditor
       theme="dark"
       height={height}
       onChange={handleEditorChange}
-      language="javascript"
+      language="typescript"
     />
   );
 }

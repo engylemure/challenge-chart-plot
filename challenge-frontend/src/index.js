@@ -3,6 +3,18 @@ import ReactDOM from 'react-dom';
 import './index.css';
 import App from './ui/screens/app/App';
 import * as serviceWorker from './serviceWorker';
+import {monaco} from "@monaco-editor/react";
+monaco
+    .init()
+    .then(monaco => {
+        monaco.languages.typescript.typescriptDefaults.setDiagnosticsOptions({
+            noSemanticValidation: true,
+            noSyntaxValidation: true,
+        });
+    })
+    .catch(error =>
+        console.error("An error occurred during initialization of Monaco: ", error)
+    );
 
 ReactDOM.render(<App />, document.getElementById('root'));
 
