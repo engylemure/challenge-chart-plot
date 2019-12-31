@@ -9,7 +9,7 @@
     "@monaco-editor/react": "^2.0.0",
     "@types/lodash": "^4.14.149",
     "chart.js": "^2.9.3",
-    "event_processing": "file:./event_processing",
+    "event_processing": "file:./event-processing/pkg",
     "lodash": "^4.17.15",
     "react": "^16.10.2",
     "react-chartjs-2": "^2.8.0",

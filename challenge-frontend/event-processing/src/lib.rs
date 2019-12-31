@@ -1,9 +1,9 @@
 use serde_json::{Result, Value, Map};
-use std::io::Result as StdResult;
 use serde::{Deserialize, Serialize};
 use std::fmt;
 use wasm_bindgen::prelude::*;
 use std::collections::HashMap;
+
 pub mod utils;
 
 use utils::*;
@@ -15,11 +15,11 @@ extern crate lazy_static;
 extern crate web_sys;
 
 // A macro to provide `println!(..)`-style syntax for `console.log` logging.
-macro_rules! log {
-    ( $( $t:tt )* ) => {
-        web_sys::console::log_1(&format!( $( $t )* ).into());
-    }
-}
+//macro_rules! log {
+//    ( $( $t:tt )* ) => {
+//        web_sys::console::log_1(&format!( $( $t )* ).into());
+//    }
+//}
 
 // When the `wee_alloc` feature is enabled, use `wee_alloc` as the global
 // allocator.
@@ -32,11 +32,7 @@ extern {
     fn alert(s: &str);
 }
 
-#[wasm_bindgen]
-pub fn greet() {
-    alert("Hello, event-processing!");
-}
-
+/// struct used for storing the Event Data from the type 'start'
 #[wasm_bindgen]
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct StartValue {
@@ -45,6 +41,7 @@ pub struct StartValue {
     group: Vec<String>,
 }
 
+/// struct used for storing the Event Data from the type 'span'
 #[wasm_bindgen]
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct SpanValue {
@@ -53,12 +50,15 @@ pub struct SpanValue {
     end: u64,
 }
 
+/// struct used for storing the Event Data from the type 'stop'
 #[wasm_bindgen]
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct StopValue {
     timestamp: u64,
 }
 
+/// struct used for storing the Event Data from the type 'data'
+/// it seems that this struct is not generic enough so we will need to refactor the dataset generation
 #[wasm_bindgen]
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct DataValue {
@@ -69,6 +69,7 @@ pub struct DataValue {
     max_response_time: f32,
 }
 
+/// enum for defining the possible Event types accepted by the process
 #[derive(Debug, Clone)]
 pub enum Event {
     Start(StartValue),
@@ -78,6 +79,7 @@ pub enum Event {
     Unknown,
 }
 
+/// struct for a Point information from a Event
 #[wasm_bindgen]
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Point {
@@ -85,6 +87,7 @@ pub struct Point {
     timestamp: u64,
 }
 
+/// struct for a DataSet that includes some information about a specific grouping of Events
 #[wasm_bindgen]
 #[derive(Debug, Serialize, Deserialize)]
 pub struct DataSet {
@@ -212,7 +215,7 @@ impl Events {
         self.events.len()
     }
 
-    pub fn get_events_data_by_idx(&self, idx: usize) -> Option<EventsData>{
+    pub fn get_events_data_by_idx(&self, idx: usize) -> Option<EventsData> {
         Some(self.events[idx].clone())
     }
 
@@ -357,22 +360,28 @@ impl EventsData {
                         }
                     }
                 }
-                let data_sets: Vec<DataSet> = groups.iter().map(|v: &(String, Option<String>, Option<String>)| {
+                let mut data_sets: Vec<DataSet> = groups.iter().map(|v: &(String, Option<String>, Option<String>)| {
                     DataSet {
-                        points: self.get_points_by_tuple_info(v.clone().into()),
+                        points: Vec::new(),
                         selection: v.0.clone(),
-                        group: (v.1.clone(), v.2.clone())
+                        group: (v.1.clone(), v.2.clone()),
                     }
                 }).collect();
+                let mut vec_points = self.get_points_by_tuples(groups);
+                for dataset_idx in 0..data_sets.len() {
+                    data_sets[dataset_idx].points.append(&mut vec_points[dataset_idx])
+                }
                 return data_sets;
-            },
+            }
             _ => {}
         };
         Vec::new()
     }
 
-    fn get_points_by_tuple_info(&self, tuple: (String, Option<String>, Option<String>)) -> Vec<Point> {
-        let mut points: Vec<Point> = Vec::new();
+    fn get_points_by_tuples(&self, tuples: Vec<(String, Option<String>, Option<String>)>) -> Vec<Vec<Point>> {
+        let mut points: Vec<Vec<Point>> = tuples.iter().map(|_| {
+            Vec::new()
+        }).collect();
         let mut stop_timestamp: u64 = 0;
         let mut span_begin_timestamp: u64 = 0;
         let mut span_end_timestamp: u64 = 0;
@@ -392,14 +401,18 @@ impl EventsData {
             _ => false
         };
         for event in self.events.clone() {
-            let point = Point::from(event, tuple.0.clone(), tuple.1.clone(), tuple.2.clone());
-            match point {
-                Some(point) => {
-                    if ((has_stop && stop_timestamp >= point.timestamp) || !has_stop) && ((has_span && point.timestamp >= span_begin_timestamp && point.timestamp <= span_end_timestamp) || !has_span) {
-                        points.push(point);
+            let mut tuple_idx = 0;
+            for tuple in &tuples {
+                let point = Point::from(event.clone(), tuple.0.clone(), tuple.1.clone(), tuple.2.clone());
+                match point {
+                    Some(point) => {
+                        if ((has_stop && stop_timestamp >= point.timestamp) || !has_stop) && ((has_span && point.timestamp >= span_begin_timestamp && point.timestamp <= span_end_timestamp) || !has_span) {
+                            points[tuple_idx].push(point);
+                        }
                     }
-                }
-                None => {}
+                    None => {}
+                };
+                tuple_idx += 1;
             }
         }
         points

@@ -20,7 +20,6 @@ export function processText(
 ): ChartData<chartjs.ChartData>[] {
   if (events) {
     let data: ChartData<chartjs.ChartData>[] = []
-    console.log(events.events_count())
     for (let i = 0; i < events.events_count(); i++) {
       let eventsData = events.get_events_data_by_idx(i)
       if (eventsData) {

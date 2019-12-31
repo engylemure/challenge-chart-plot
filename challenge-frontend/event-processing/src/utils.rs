@@ -11,6 +11,7 @@ pub fn set_panic_hook() {
     console_error_panic_hook::set_once();
 }
 
+/// Function for parsing some non strict JSON lines into strict JSON format.
 pub fn line_transformation(line: &str) -> String {
     lazy_static! {
         static ref RE1: Regex = Regex::new(r"([\$\w]+)\s*:").unwrap();
@@ -20,10 +21,12 @@ pub fn line_transformation(line: &str) -> String {
     String::from(RE2.replace_all(line_transformed.as_str(), change_single_quotes_too_double).as_ref())
 }
 
+/// Function for adding double quotes into key values for usage in line_transformation.
 pub fn add_quotes_to_key(caps: &Captures) -> String {
     format!("\"{}\":", &caps[1])
 }
 
+/// Function for changing any single quote usage in the JSON line into double quote for usage in the line_transformation.
 pub fn change_single_quotes_too_double(caps: &Captures) -> String {
     format!("\"{}\"", &caps[1])
 }
