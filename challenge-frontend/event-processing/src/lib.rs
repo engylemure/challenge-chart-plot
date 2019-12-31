@@ -58,7 +58,7 @@ pub struct StopValue {
 }
 
 /// struct used for storing the Event Data from the type 'data'
-/// it seems that this struct is not generic enough so we will need to refactor the dataset generation
+// TODO: It seems that this struct is not generic enough so we will need to refactor the dataset generation
 #[wasm_bindgen]
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct DataValue {

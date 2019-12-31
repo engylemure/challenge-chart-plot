@@ -21,3 +21,9 @@ for easy use of responsive and stylish components according to Material Design,
 editing text, [react-chartjs-2](https://www.npmjs.com/package/react-chartjs-2) 
 for dynamic and responsive graphics generation (A react wrapper from the well-known 
 [chart.js](https://www.npmjs.com/package/chart.js) library).
+
+
+### TODO
+* Add processing functionality for more flexible data event and possible selection and grouping via start event
+* Add Test suite for the RUST implementation
+* Add JavaScript testing
