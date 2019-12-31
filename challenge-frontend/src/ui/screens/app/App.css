@@ -23,17 +23,14 @@
 
 .draggable-icon {
   position: absolute;
-  width: 30px;
-  height: 20px;
+  width: 36px;
+  height: 24px;
   background-repeat: no-repeat;
   background-origin: content-box;
   box-sizing: border-box;
-  background-position: bottom right;
   background-color: grey;
   justify-content: center;
   align-content: center;
-  display: flex;
-  flex: 1;
   border-radius: 5px;
   padding: 0 3px 3px 0;
   left: 50%;

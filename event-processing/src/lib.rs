@@ -293,7 +293,10 @@ impl EventsData {
             };
             if line_idx == line_count {
                 events.number_of_lines = number_of_lines;
-                events_vec.push(events);
+                match events.start_event {
+                    Event::Start(_) => events_vec.push(events),
+                    _ => {}
+                }
                 events = EventsData::default();
                 number_of_lines = 0;
             }
