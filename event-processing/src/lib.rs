@@ -1,9 +1,12 @@
 use serde_json::{Result, Value, Map};
+use std::io::Result as StdResult;
 use serde::{Deserialize, Serialize};
 use std::fmt;
 use wasm_bindgen::prelude::*;
-use regex::{Regex, Captures};
 use std::collections::HashMap;
+pub mod utils;
+
+use utils::*;
 
 #[macro_use]
 extern crate lazy_static;
@@ -35,7 +38,7 @@ pub fn greet() {
 }
 
 #[wasm_bindgen]
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct StartValue {
     timestamp: u64,
     select: Vec<String>,
@@ -43,7 +46,7 @@ pub struct StartValue {
 }
 
 #[wasm_bindgen]
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct SpanValue {
     timestamp: u64,
     begin: u64,
@@ -51,13 +54,13 @@ pub struct SpanValue {
 }
 
 #[wasm_bindgen]
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct StopValue {
     timestamp: u64,
 }
 
 #[wasm_bindgen]
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct DataValue {
     timestamp: u64,
     os: String,
@@ -66,7 +69,7 @@ pub struct DataValue {
     max_response_time: f32,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum Event {
     Start(StartValue),
     Span(SpanValue),
@@ -76,10 +79,29 @@ pub enum Event {
 }
 
 #[wasm_bindgen]
-#[derive(Debug)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct Point {
     value: f32,
     timestamp: u64,
+}
+
+#[wasm_bindgen]
+#[derive(Debug, Serialize, Deserialize)]
+pub struct DataSet {
+    points: Vec<Point>,
+    selection: String,
+    group: (Option<String>, Option<String>),
+}
+
+
+impl DataSet {
+    pub fn selection(&self) -> String {
+        self.selection.clone()
+    }
+
+    pub fn points(&self) -> *const Point {
+        self.points.as_ptr()
+    }
 }
 
 #[wasm_bindgen]
@@ -89,6 +111,38 @@ impl Point {
     }
     pub fn timestamp(&self) -> u64 {
         self.timestamp
+    }
+
+    fn from(event: Event, selection: String, os: Option<String>, browser: Option<String>) -> Option<Point> {
+        match event {
+            Event::Data(data_value) => {
+                let mut point = Point {
+                    value: 0.0,
+                    timestamp: data_value.timestamp,
+                };
+                if selection == String::from("min_response_time") {
+                    point.value = data_value.min_response_time;
+                } else if selection == String::from("max_response_time") {
+                    point.value = data_value.max_response_time;
+                } else {
+                    return None;
+                }
+                let is_in_os = match os {
+                    Some(os) => data_value.os == os,
+                    None => true
+                };
+                let is_in_browser = match browser {
+                    Some(browser) => data_value.browser == browser,
+                    None => true
+                };
+                if is_in_browser && is_in_os {
+                    Some(point)
+                } else {
+                    None
+                }
+            }
+            _ => None
+        }
     }
 }
 
@@ -112,7 +166,7 @@ impl Event {
 
 
 #[wasm_bindgen]
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct EventsData {
     events: Vec<Event>,
     span_event: Event,
@@ -150,9 +204,22 @@ impl Events {
         let data_from_text = EventsData::from_text(text);
         Events {
             events: data_from_text.0,
-            number_of_lines: data_from_text.1
+            number_of_lines: data_from_text.1,
         }
     }
+
+    pub fn events_count(&self) -> usize {
+        self.events.len()
+    }
+
+    pub fn get_events_data_by_idx(&self, idx: usize) -> Option<EventsData>{
+        Some(self.events[idx].clone())
+    }
+
+    pub fn events(&self) -> *const EventsData {
+        self.events.as_ptr()
+    }
+
     pub fn render(&self) -> String {
         self.to_string()
     }
@@ -219,7 +286,7 @@ impl EventsData {
                                 events.add_event(Event::Data(data_value));
                             }
                         }
-                        Event::Unknown => { }
+                        Event::Unknown => {}
                     };
                 }
                 Err(_) => {}
@@ -245,6 +312,96 @@ impl EventsData {
         self.events.push(event);
     }
 
+    pub fn dataset_vec(&self) -> JsValue {
+        let dataset = self.dataset_from_events_data();
+        serde_wasm_bindgen::to_value(&dataset).unwrap()
+    }
+
+    fn dataset_from_events_data(&self) -> Vec<DataSet> {
+        match self.start_event.clone() {
+            Event::Start(start_value) => {
+                let mut groups: Vec<(String, Option<String>, Option<String>)> = Vec::new();
+                if start_value.group.len() == 0 {
+                    for selection in start_value.select {
+                        groups.push((selection, None, None));
+                    }
+                } else {
+                    let group_has_os = start_value.group.contains(&String::from("os"));
+                    let group_has_browser = start_value.group.contains(&String::from("browser"));
+                    if group_has_browser && group_has_os {
+                        for os in self.os_map.keys() {
+                            for browser in self.browser_map.keys() {
+                                for selection in start_value.select.clone() {
+                                    groups.push((selection, Some(os.clone()), Some(browser.clone())));
+                                }
+                            }
+                        }
+                    } else if group_has_browser {
+                        for browser in self.browser_map.keys() {
+                            for selection in start_value.select.clone() {
+                                groups.push((selection, None, Some(browser.clone())));
+                            }
+                        }
+                    } else if group_has_os {
+                        for os in self.os_map.keys() {
+                            for selection in start_value.select.clone() {
+                                groups.push((selection, Some(os.clone()), None));
+                            }
+                        }
+                    } else {
+                        for selection in start_value.select {
+                            groups.push((selection, None, None));
+                        }
+                    }
+                }
+                let data_sets: Vec<DataSet> = groups.iter().map(|v: &(String, Option<String>, Option<String>)| {
+                    DataSet {
+                        points: self.get_points_by_tuple_info(v.clone().into()),
+                        selection: v.0.clone(),
+                        group: (v.1.clone(), v.2.clone())
+                    }
+                }).collect();
+                return data_sets;
+            },
+            _ => {}
+        };
+        Vec::new()
+    }
+
+    fn get_points_by_tuple_info(&self, tuple: (String, Option<String>, Option<String>)) -> Vec<Point> {
+        let mut points: Vec<Point> = Vec::new();
+        let mut stop_timestamp: u64 = 0;
+        let mut span_begin_timestamp: u64 = 0;
+        let mut span_end_timestamp: u64 = 0;
+        let has_span = match self.span_event.clone() {
+            Event::Span(span_value) => {
+                span_begin_timestamp = span_value.begin;
+                span_end_timestamp = span_value.end;
+                true
+            }
+            _ => false
+        };
+        let has_stop = match self.stop_event.clone() {
+            Event::Stop(stop_value) => {
+                stop_timestamp = stop_value.timestamp;
+                true
+            }
+            _ => false
+        };
+        for event in self.events.clone() {
+            let point = Point::from(event, tuple.0.clone(), tuple.1.clone(), tuple.2.clone());
+            match point {
+                Some(point) => {
+                    if ((has_stop && stop_timestamp >= point.timestamp) || !has_stop) && ((has_span && point.timestamp >= span_begin_timestamp && point.timestamp <= span_end_timestamp) || !has_span) {
+                        points.push(point);
+                    }
+                }
+                None => {}
+            }
+        }
+        points
+    }
+
     pub fn number_of_lines(&self) -> u64 {
         self.number_of_lines
     }
@@ -252,23 +409,6 @@ impl EventsData {
     pub fn render(&self) -> String {
         self.to_string()
     }
-}
-
-fn line_transformation(line: &str) -> String {
-    lazy_static! {
-        static ref RE1: Regex = Regex::new(r"([\$\w]+)\s*:").unwrap();
-        static ref RE2: Regex = Regex::new(r"'([^']+)'").unwrap();
-    }
-    let line_transformed = String::from(RE1.replace_all(&line.clone(), add_quotes_to_key).as_ref());
-    String::from(RE2.replace_all(line_transformed.as_str(), change_single_quotes_too_double).as_ref())
-}
-
-fn add_quotes_to_key(caps: &Captures) -> String {
-    format!("\"{}\":", &caps[1])
-}
-
-fn change_single_quotes_too_double(caps: &Captures) -> String {
-    format!("\"{}\"", &caps[1])
 }
 
 impl fmt::Display for EventsData {
