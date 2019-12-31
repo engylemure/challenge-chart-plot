@@ -1,27 +1,27 @@
 {
   "files": {
-    "main.css": "/challenge-chart-plot/static/css/main.d7a35da8.chunk.css",
-    "main.js": "/challenge-chart-plot/static/js/main.3248d3f8.chunk.js",
-    "main.js.map": "/challenge-chart-plot/static/js/main.3248d3f8.chunk.js.map",
-    "runtime-main.js": "/challenge-chart-plot/static/js/runtime-main.983119fd.js",
-    "runtime-main.js.map": "/challenge-chart-plot/static/js/runtime-main.983119fd.js.map",
+    "main.css": "/challenge-chart-plot/static/css/main.9a981582.chunk.css",
+    "main.js": "/challenge-chart-plot/static/js/main.d3bf8219.chunk.js",
+    "main.js.map": "/challenge-chart-plot/static/js/main.d3bf8219.chunk.js.map",
+    "runtime-main.js": "/challenge-chart-plot/static/js/runtime-main.f2c5d22e.js",
+    "runtime-main.js.map": "/challenge-chart-plot/static/js/runtime-main.f2c5d22e.js.map",
     "static/css/2.dc22652a.chunk.css": "/challenge-chart-plot/static/css/2.dc22652a.chunk.css",
-    "static/js/2.78423eaf.chunk.js": "/challenge-chart-plot/static/js/2.78423eaf.chunk.js",
-    "static/js/2.78423eaf.chunk.js.map": "/challenge-chart-plot/static/js/2.78423eaf.chunk.js.map",
-    "static/js/3.42c5c663.chunk.js": "/challenge-chart-plot/static/js/3.42c5c663.chunk.js",
-    "bcfb214d7970e27375ae.module.wasm": "/challenge-chart-plot/bcfb214d7970e27375ae.module.wasm",
-    "static/js/3.42c5c663.chunk.js.map": "/challenge-chart-plot/static/js/3.42c5c663.chunk.js.map",
+    "static/js/2.02b65b3c.chunk.js": "/challenge-chart-plot/static/js/2.02b65b3c.chunk.js",
+    "static/js/2.02b65b3c.chunk.js.map": "/challenge-chart-plot/static/js/2.02b65b3c.chunk.js.map",
+    "static/js/3.d5f3c763.chunk.js": "/challenge-chart-plot/static/js/3.d5f3c763.chunk.js",
+    "c1d9aacff6b02df26a67.module.wasm": "/challenge-chart-plot/c1d9aacff6b02df26a67.module.wasm",
+    "static/js/3.d5f3c763.chunk.js.map": "/challenge-chart-plot/static/js/3.d5f3c763.chunk.js.map",
     "index.html": "/challenge-chart-plot/index.html",
-    "precache-manifest.ec4e81908ceff5d42c230d78f1719e11.js": "/challenge-chart-plot/precache-manifest.ec4e81908ceff5d42c230d78f1719e11.js",
+    "precache-manifest.0f211132ef26eec43d1707bb8fa0a1b9.js": "/challenge-chart-plot/precache-manifest.0f211132ef26eec43d1707bb8fa0a1b9.js",
     "service-worker.js": "/challenge-chart-plot/service-worker.js",
     "static/css/2.dc22652a.chunk.css.map": "/challenge-chart-plot/static/css/2.dc22652a.chunk.css.map",
-    "static/css/main.d7a35da8.chunk.css.map": "/challenge-chart-plot/static/css/main.d7a35da8.chunk.css.map"
+    "static/css/main.9a981582.chunk.css.map": "/challenge-chart-plot/static/css/main.9a981582.chunk.css.map"
   },
   "entrypoints": [
-    "static/js/runtime-main.983119fd.js",
+    "static/js/runtime-main.f2c5d22e.js",
     "static/css/2.dc22652a.chunk.css",
-    "static/js/2.78423eaf.chunk.js",
-    "static/css/main.d7a35da8.chunk.css",
-    "static/js/main.3248d3f8.chunk.js"
+    "static/js/2.02b65b3c.chunk.js",
+    "static/css/main.9a981582.chunk.css",
+    "static/js/main.d3bf8219.chunk.js"
   ]
 }
