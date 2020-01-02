@@ -11,7 +11,8 @@ import { ResizableBox } from 'react-resizable'
 import { useWindowSize } from '../../../core/hooks'
 import './App.css'
 import 'react-resizable/css/styles.css'
-import { processText } from '../../../core/event_processing'
+import { processEvents, measureTime } from '../../../core/event_processing'
+import { processText, processEventsMapped } from '../../../core/event_processing_without_wasm'
 import ChartSection from '../../components/stateful/chart_section/ChartSection'
 
 const theme = createMuiTheme({
@@ -49,10 +50,16 @@ function App() {
 
   const onGenerateChartButtonPress = useCallback(async () => {
     if (text && wasm) {
-      const events = wasm.Events.from_text(text)
-      if (events) {
-        setData(processText(events))
-      }
+      const [withoutWasmResult,,, withoutElapsedTime] = measureTime(() => processEventsMapped(processText(text)), 'without wasm')
+      const [withWasmResult,,, withElapsedTime] = measureTime(() => {
+        const events = wasm.Events.from_text(text)
+        if (events) {
+          return processEvents(events)
+        } else {
+          return []
+        }
+      }, 'with wasm')
+      setData(withoutElapsedTime < withElapsedTime ? withoutWasmResult : withWasmResult)
     }
   }, [text, wasm])
   useEffect(() => {

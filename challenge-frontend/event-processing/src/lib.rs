@@ -1,7 +1,6 @@
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Result, Value};
 use std::collections::HashMap;
-use std::fmt;
 use wasm_bindgen::prelude::*;
 
 pub mod utils;
@@ -12,9 +11,26 @@ use utils::*;
 extern crate lazy_static;
 
 extern crate web_sys;
+use web_sys::console;
 
+pub struct Timer<'a> {
+    name: &'a str,
+}
+
+impl<'a> Timer<'a> {
+    pub fn new(name: &'a str) -> Timer<'a> {
+        console::time_with_label(name);
+        Timer { name }
+    }
+}
+
+impl<'a> Drop for Timer<'a> {
+    fn drop(&mut self) {
+        console::time_end_with_label(self.name);
+    }
+}
 // A macro to provide `println!(..)`-style syntax for `console.log` logging.
-// macro_rules! log {
+//macro_rules! log {
 //    ( $( $t:tt )* ) => {
 //        web_sys::console::log_1(&format!( $( $t )* ).into());
 //    }
@@ -86,13 +102,24 @@ pub struct Point {
 /// struct for a DataSet that includes some information about a specific grouping of Events
 #[wasm_bindgen]
 #[derive(Debug, Serialize, Deserialize)]
-pub struct DataSet {
+pub struct DataSet{
     points: Vec<Point>,
     selection: String,
     group: Vec<(String, Groupable)>,
 }
 
 impl DataSet {
+    pub fn new(
+        selection: String,
+        group: Vec<(String, Groupable)>,
+        points: Vec<Point>,
+    ) -> DataSet {
+        DataSet {
+            points,
+            selection,
+            group,
+        }
+    }
     pub fn selection(&self) -> String {
         self.selection.clone()
     }
@@ -102,7 +129,7 @@ impl DataSet {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-enum Groupable {
+pub enum Groupable {
     Bool(bool),
     String(String),
     Number(f64),
@@ -141,63 +168,65 @@ impl Point {
         self.timestamp
     }
 
-    fn from(event: Event, selection: String, group: Vec<(String, Groupable)>) -> Option<Point> {
-        match event {
-            Event::Data(data_value) => {
-                let mut point = Point {
-                    value: 0.0,
-                    timestamp: data_value.timestamp,
-                };
-                let is_in_group = {
-                    let mut is = true;
-                    for g in group {
-                        is = is
-                            && match &data_value.data.get(&g.0) {
-                                Some(data) => match data {
-                                    Value::Bool(d_value) => match g.1 {
-                                        Groupable::Bool(g_value) => g_value == *d_value,
-                                        _ => false,
-                                    },
-                                    Value::Null => match g.1 {
-                                        Groupable::Null => true,
-                                        _ => false,
-                                    },
-                                    Value::String(d_s) => match g.1 {
-                                        Groupable::String(g_value) => g_value == *d_s,
-                                        _ => false,
-                                    },
-                                    Value::Number(d_n) => match d_n.as_f64() {
-                                        Some(n) => match g.1 {
-                                            Groupable::Number(g_value) => g_value == n,
-                                            _ => false,
-                                        },
-                                        None => false,
-                                    },
+    fn from(
+        data_value: &DataValue,
+        selection: &String,
+        group: &Vec<(String, Groupable)>,
+    ) -> Option<Point> {
+        let mut point = Point {
+            value: 0.0,
+            timestamp: data_value.timestamp,
+        };
+        let is_in_group = {
+            let mut is = true;
+            for g in group {
+                is = is
+                    && match data_value.data.get(&g.0) {
+                        Some(data) => match data {
+                            Value::Bool(d_value) => match g.1 {
+                                Groupable::Bool(g_value) => g_value == *d_value,
+                                _ => false,
+                            },
+                            Value::Null => match g.1 {
+                                Groupable::Null => true,
+                                _ => false,
+                            },
+                            Value::String(d_s) => match &g.1 {
+                                Groupable::String(g_value) => g_value == d_s,
+                                _ => false,
+                            },
+                            Value::Number(d_n) => match d_n.as_f64() {
+                                Some(n) => match g.1 {
+                                    Groupable::Number(g_value) => g_value == n,
                                     _ => false,
                                 },
-                                _ => false,
-                            }
+                                None => false,
+                            },
+                            _ => false,
+                        },
+                        _ => false,
                     }
-                    is
-                };
-                if is_in_group {
-                    match &data_value.data[&selection] {
-                        Value::Number(number) => {
-                            return match number.as_f64() {
-                                Some(n) => Some({
-                                    point.value = n;
-                                    point
-                                }),
-                                None => None,
-                            }
-                        }
-                        _ => {}
-                    };
-                }
-                None
             }
-            _ => None,
+            is
+        };
+        if is_in_group {
+            match data_value.data.get(selection) {
+                Some(value) => match value {
+                    Value::Number(number) => {
+                        return match number.as_f64() {
+                            Some(n) => Some({
+                                point.value = n;
+                                point
+                            }),
+                            None => None,
+                        }
+                    }
+                    _ => {}
+                },
+                None => {}
+            };
         }
+        None
     }
 }
 
@@ -218,7 +247,7 @@ impl Event {
                     if timestamp.is_some() {
                         Event::Data(DataValue {
                             timestamp: timestamp.unwrap(),
-                            data: map.clone(),
+                            data: map,
                         })
                     } else {
                         Event::Unknown
@@ -235,25 +264,21 @@ impl Event {
 #[wasm_bindgen]
 #[derive(Debug, Clone)]
 pub struct EventsData {
-    events: Vec<Event>,
-    span_event: Event,
-    start_event: Event,
-    stop_event: Event,
-    select: Option<Vec<String>>,
+    data_events: Vec<DataValue>,
+    span: Option<SpanValue>,
+    start: Option<StartValue>,
+    stop: Option<StopValue>,
     group_map: HashMap<String, Vec<(String, Groupable)>>,
-    number_of_lines: u64,
 }
 
 impl Default for EventsData {
     fn default() -> EventsData {
         EventsData {
-            events: Vec::new(),
-            span_event: Event::Unknown,
-            start_event: Event::Unknown,
-            stop_event: Event::Unknown,
-            select: Some(Vec::new()),
+            data_events: Vec::new(),
+            span: None,
+            start: None,
+            stop: None,
             group_map: HashMap::new(),
-            number_of_lines: 0,
         }
     }
 }
@@ -267,7 +292,7 @@ pub struct Events {
 
 #[wasm_bindgen]
 impl Events {
-    pub fn from_text(text: String) -> Events {
+    pub fn from_text(text: &str) -> Events {
         let data_from_text = EventsData::from_text(text);
         Events {
             events: data_from_text.0,
@@ -279,145 +304,108 @@ impl Events {
         self.events.len()
     }
 
-    pub fn get_events_data_by_idx(&self, idx: usize) -> Option<EventsData> {
-        Some(self.events[idx].clone())
-    }
-
-    pub fn events(&self) -> *const EventsData {
-        self.events.as_ptr()
-    }
-
-    pub fn render(&self) -> String {
-        self.to_string()
+    pub fn process_events_data(&self) -> JsValue {
+        let processed_events: Vec<Vec<DataSet>> = self
+            .events
+            .iter()
+            .map(|v| v.dataset_from_events_data())
+            .collect();
+        serde_wasm_bindgen::to_value(&processed_events).unwrap()
     }
 }
 
-impl fmt::Display for Events {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{:?}\n", self)?;
-        Ok(())
-    }
-}
-
-#[wasm_bindgen]
 impl EventsData {
-    fn from_text(text: String) -> (Vec<EventsData>, usize) {
+    fn from_text(text: &str) -> (Vec<EventsData>, usize) {
+        let _timer = Timer::new("Events::from_text");
         let mut events_vec: Vec<EventsData> = Vec::new();
         let mut events = EventsData::default();
-        let mut number_of_lines: u64 = 0;
+        let mut number_of_lines: usize = 0;
         let mut has_started = false;
-        let cloned_text = text.clone();
-        let lines = cloned_text.lines();
-        let line_count = lines.count();
-        let mut line_idx = 0;
-        for line in text.lines() {
-            number_of_lines += 1;
-            line_idx += 1;
-            let string_line = line_transformation(line);
-            let v: Value = match serde_json::from_str(string_line.as_str()) {
-                Ok(result) => result,
-                _ => Value::Null,
-            };
-            let event_result = match v {
-                Value::Object(map) => Event::from_map(map),
-                _ => Ok(Event::Unknown),
-            };
-            match event_result {
-                Ok(event) => {
-                    match event {
-                        Event::Stop(stop_value) => {
-                            events.stop_event = Event::Stop(stop_value);
-                            events.number_of_lines = number_of_lines;
-                            events_vec.push(events);
-                            events = EventsData::default();
-                            number_of_lines = 0;
-                            has_started = false;
-                        }
-                        Event::Start(start_value) => {
-                            if has_started {
-                                events.number_of_lines = number_of_lines - 1;
+        {
+            let _timer1 = Timer::new("Events::from_text#line_loop");
+            for line in text.lines() {
+                number_of_lines += 1;
+                let string_line = line_transformation(line);
+                let v: Value = match serde_json::from_str(string_line.as_ref()) {
+                    Ok(result) => result,
+                    _ => Value::Null,
+                };
+                let event_result = match v {
+                    Value::Object(map) => Event::from_map(map),
+                    _ => Ok(Event::Unknown),
+                };
+                match event_result {
+                    Ok(event) => {
+                        match event {
+                            Event::Stop(stop_value) => {
+                                events.stop = Some(stop_value);
                                 events_vec.push(events);
                                 events = EventsData::default();
-                                events.select = start_value.select.clone();
-                                events.start_event = Event::Start(start_value);
-                                number_of_lines = 1;
-                            } else {
-                                events.select = start_value.select.clone();
-                                events.start_event = Event::Start(start_value);
-                                has_started = true;
+                                number_of_lines = 0;
+                                has_started = false;
                             }
-                        }
-                        Event::Span(span_value) => {
-                            events.span_event = Event::Span(span_value);
-                        }
-                        Event::Data(data_value) => {
-                            if has_started {
-                                events.add_event(Event::Data(data_value));
-                            }
-                        }
-                        Event::Unknown => {}
-                    };
-                }
-                Err(_) => {}
-            };
-            if line_idx == line_count {
-                events.number_of_lines = number_of_lines;
-                match events.start_event {
-                    Event::Start(_) => events_vec.push(events),
-                    _ => {}
-                }
-                events = EventsData::default();
-                number_of_lines = 0;
-            }
-        }
-        (events_vec, line_count)
-    }
-
-    fn add_event(&mut self, event: Event) {
-        match &event {
-            Event::Data(data_value) => match self.start_event.clone() {
-                Event::Start(start_value) => {
-                    match start_value.group.clone() {
-                        Some(group) => {
-                            for s in group {
-                                match &data_value.data.get(&s) {
-                                    Some(data) => match data {
-                                        Value::Bool(b) => {
-                                            self.insert_in_group_map((
-                                                s.clone(),
-                                                Groupable::Bool(*b),
-                                            ));
-                                        }
-                                        Value::Null => {
-                                            self.insert_in_group_map((s.clone(), Groupable::Null));
-                                        }
-                                        Value::Number(n) => match n.as_f64() {
-                                            Some(n) => self.insert_in_group_map((
-                                                s.clone(),
-                                                Groupable::Number(n),
-                                            )),
-                                            None => (),
-                                        },
-                                        Value::String(s_) => {
-                                            self.insert_in_group_map((
-                                                s.clone(),
-                                                Groupable::String(s_.clone()),
-                                            ));
-                                        }
-                                        _ => {}
-                                    },
-                                    None => (),
+                            Event::Start(start_value) => {
+                                if has_started {
+                                    events_vec.push(events);
+                                    events = EventsData::default();
+                                    events.start = Some(start_value);
+                                    number_of_lines = 1;
+                                } else {
+                                    events.start = Some(start_value);
+                                    has_started = true;
                                 }
                             }
-                        },
-                        None => ()
-                    };
+                            Event::Span(span_value) => {
+                                events.span = Some(span_value);
+                            }
+                            Event::Data(data_value) => {
+                                if has_started {
+                                    events.add_data_value(data_value);
+                                }
+                            }
+                            Event::Unknown => {}
+                        };
+                    }
+                    Err(_) => {}
+                };
+            }
+        }
+        match events.start {
+            Some(_) => events_vec.push(events),
+            None => {}
+        }
+        (events_vec, number_of_lines)
+    }
+
+    fn add_data_value(&mut self, data_value: DataValue) {
+        match self.start.clone() {
+            Some(s) => match &s.group {
+                Some(group) => {
+                    for g in group {
+                        let g_option = match data_value.data.get(g) {
+                            Some(data) => match data {
+                                Value::Bool(b) => Some(Groupable::Bool(*b)),
+                                Value::Null => Some(Groupable::Null),
+                                Value::Number(n) => match n.as_f64() {
+                                    Some(n) => Some(Groupable::Number(n)),
+                                    None => None,
+                                },
+                                Value::String(s_) => Some(Groupable::String(s_.clone())),
+                                _ => None,
+                            },
+                            None => None,
+                        };
+                        match g_option {
+                            Some(value) => self.insert_in_group_map((g.to_string(), value)),
+                            None => {}
+                        }
+                    }
                 }
-                _ => (),
+                None => {}
             },
-            _ => {}
-        };
-        self.events.push(event);
+            None => {}
+        }
+        self.data_events.push(data_value)
     }
 
     fn insert_in_group_map(&mut self, value: (String, Groupable)) {
@@ -440,54 +428,55 @@ impl EventsData {
         serde_wasm_bindgen::to_value(&dataset).unwrap()
     }
 
-    fn dataset_from_events_data(&self) -> Vec<DataSet> {
-        match self.select.clone() {
-            Some(select) => {
-                if select.len() > 0 {
-                    match self.start_event.clone() {
-                        Event::Start(start_value) => {
-                            let group_values: Vec<Vec<(String, Groupable)>> =
-                                self.group_map.values().map(|v| v.clone()).collect();
-                            let mut data_sets: Vec<DataSet> = {
-                                let mut sets: Vec<DataSet> = Vec::new();
-                                if group_values.len() > 0 {
-                                    let mut groups = cartesian_product(group_values);
-                                    for s in select {
-                                        let mut sets_group: Vec<DataSet> = groups
-                                            .iter()
-                                            .map(|v| DataSet {
-                                                points: Vec::new(),
-                                                selection: s.clone(),
-                                                group: v.to_vec(),
-                                            })
-                                            .collect();
-                                        sets.append(&mut sets_group)
+    fn dataset_from_events_data<'a>(&self) -> Vec<DataSet> {
+        match &self.start {
+            Some(start_value) => match &start_value.select {
+                Some(select) => {
+                    if select.len() > 0 {
+                        match self.start.clone() {
+                            Some(_) => {
+                                let group_values: Vec<Vec<(String, Groupable)>> =
+                                    self.group_map.values().map(|v| v.clone()).collect();
+                                let mut data_sets: Vec<DataSet> = {
+                                    let mut sets: Vec<DataSet> = Vec::new();
+                                    if group_values.len() > 0 {
+                                        let groups = cartesian_product(group_values);
+                                        for s in select {
+                                            let mut sets_group: Vec<DataSet> = groups
+                                                .iter()
+                                                .map(|v| {
+                                                    DataSet::new(s.into(), v.to_vec(), Vec::new())
+                                                })
+                                                .collect();
+                                            sets.append(&mut sets_group)
+                                        }
+                                    } else {
+                                        for s in select {
+                                            sets.push(DataSet::new(
+                                                s.into(),
+                                                Vec::new(),
+                                                Vec::new(),
+                                            ));
+                                        }
                                     }
-                                } else {
-                                    for s in select {
-                                        sets.push(DataSet {
-                                            points: Vec::new(),
-                                            selection: s.clone(),
-                                            group: Vec::new(),
-                                        });
-                                    }
+                                    sets
+                                };
+                                let mut vec_points = self.get_points_from_datasets(&data_sets);
+                                for dataset_idx in 0..data_sets.len() {
+                                    data_sets[dataset_idx]
+                                        .points
+                                        .append(&mut vec_points[dataset_idx])
                                 }
-                                sets
-                            };
-                            let mut vec_points = self.get_points_from_datasets(&data_sets);
-                            for dataset_idx in 0..data_sets.len() {
-                                data_sets[dataset_idx]
-                                    .points
-                                    .append(&mut vec_points[dataset_idx])
-                            }
 
-                            return data_sets;
-                        }
-                        _ => {}
+                                return data_sets;
+                            }
+                            _ => {}
+                        };
                     };
-                };
+                }
+                _ => (),
             },
-            _ => (),
+            None => {}
         }
         Vec::new()
     }
@@ -497,25 +486,25 @@ impl EventsData {
         let mut stop_timestamp: u64 = 0;
         let mut span_begin_timestamp: u64 = 0;
         let mut span_end_timestamp: u64 = 0;
-        let has_span = match self.span_event.clone() {
-            Event::Span(span_value) => {
+        let has_span = match &self.span {
+            Some(span_value) => {
                 span_begin_timestamp = span_value.begin;
                 span_end_timestamp = span_value.end;
                 true
             }
             _ => false,
         };
-        let has_stop = match self.stop_event.clone() {
-            Event::Stop(stop_value) => {
+        let has_stop = match &self.stop {
+            Some(stop_value) => {
                 stop_timestamp = stop_value.timestamp;
                 true
             }
             _ => false,
         };
-        for event in self.events.clone() {
+        for data in &self.data_events {
             let mut tuple_idx = 0;
             for d in datasets {
-                let point = Point::from(event.clone(), d.selection().clone(), d.group.clone());
+                let point = Point::from(data, &d.selection.to_string(), &d.group);
                 match point {
                     Some(point) => {
                         if ((has_stop && stop_timestamp >= point.timestamp) || !has_stop)
@@ -533,20 +522,5 @@ impl EventsData {
             }
         }
         points
-    }
-
-    pub fn number_of_lines(&self) -> u64 {
-        self.number_of_lines
-    }
-
-    pub fn render(&self) -> String {
-        self.to_string()
-    }
-}
-
-impl fmt::Display for EventsData {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{:?}\n", self)?;
-        Ok(())
     }
 }
