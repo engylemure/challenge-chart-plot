@@ -14,11 +14,11 @@ extern crate lazy_static;
 extern crate web_sys;
 
 // A macro to provide `println!(..)`-style syntax for `console.log` logging.
-//macro_rules! log {
+// macro_rules! log {
 //    ( $( $t:tt )* ) => {
 //        web_sys::console::log_1(&format!( $( $t )* ).into());
 //    }
-//}
+// }
 
 // When the `wee_alloc` feature is enabled, use `wee_alloc` as the global
 // allocator.
@@ -36,8 +36,8 @@ extern "C" {
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct StartValue {
     timestamp: u64,
-    select: Vec<String>,
-    group: Vec<String>,
+    select: Option<Vec<String>>,
+    group: Option<Vec<String>>,
 }
 
 /// struct used for storing the Event Data from the type 'span'
@@ -96,7 +96,6 @@ impl DataSet {
     pub fn selection(&self) -> String {
         self.selection.clone()
     }
-
     pub fn points(&self) -> *const Point {
         self.points.as_ptr()
     }
@@ -108,6 +107,29 @@ enum Groupable {
     String(String),
     Number(f64),
     Null,
+}
+
+impl PartialEq for Groupable {
+    fn eq(&self, other: &Self) -> bool {
+        match self {
+            Groupable::Bool(b) => match other {
+                Groupable::Bool(b1) => b == b1,
+                _ => false,
+            },
+            Groupable::String(s) => match other {
+                Groupable::String(s1) => s1 == s,
+                _ => false,
+            },
+            Groupable::Number(n) => match other {
+                Groupable::Number(n1) => n == n1,
+                _ => false,
+            },
+            Groupable::Null => match other {
+                Groupable::Null => true,
+                _ => false,
+            },
+        }
+    }
 }
 
 #[wasm_bindgen]
@@ -130,25 +152,28 @@ impl Point {
                     let mut is = true;
                     for g in group {
                         is = is
-                            && match &data_value.data[&g.0] {
-                                Value::Bool(d_value) => match g.1 {
-                                    Groupable::Bool(g_value) => g_value == *d_value,
-                                    _ => false,
-                                },
-                                Value::Null => match g.1 {
-                                    Groupable::Null => true,
-                                    _ => false,
-                                },
-                                Value::String(d_s) => match g.1 {
-                                    Groupable::String(g_value) => g_value == *d_s,
-                                    _ => false,
-                                },
-                                Value::Number(d_n) => match d_n.as_f64() {
-                                    Some(n) => match g.1 {
-                                        Groupable::Number(g_value) => g_value == n,
+                            && match &data_value.data.get(&g.0) {
+                                Some(data) => match data {
+                                    Value::Bool(d_value) => match g.1 {
+                                        Groupable::Bool(g_value) => g_value == *d_value,
                                         _ => false,
                                     },
-                                    None => false,
+                                    Value::Null => match g.1 {
+                                        Groupable::Null => true,
+                                        _ => false,
+                                    },
+                                    Value::String(d_s) => match g.1 {
+                                        Groupable::String(g_value) => g_value == *d_s,
+                                        _ => false,
+                                    },
+                                    Value::Number(d_n) => match d_n.as_f64() {
+                                        Some(n) => match g.1 {
+                                            Groupable::Number(g_value) => g_value == n,
+                                            _ => false,
+                                        },
+                                        None => false,
+                                    },
+                                    _ => false,
                                 },
                                 _ => false,
                             }
@@ -214,7 +239,7 @@ pub struct EventsData {
     span_event: Event,
     start_event: Event,
     stop_event: Event,
-    select: Vec<String>,
+    select: Option<Vec<String>>,
     group_map: HashMap<String, Vec<(String, Groupable)>>,
     number_of_lines: u64,
 }
@@ -226,7 +251,7 @@ impl Default for EventsData {
             span_event: Event::Unknown,
             start_event: Event::Unknown,
             stop_event: Event::Unknown,
-            select: Vec::new(),
+            select: Some(Vec::new()),
             group_map: HashMap::new(),
             number_of_lines: 0,
         }
@@ -313,9 +338,11 @@ impl EventsData {
                                 events.number_of_lines = number_of_lines - 1;
                                 events_vec.push(events);
                                 events = EventsData::default();
+                                events.select = start_value.select.clone();
                                 events.start_event = Event::Start(start_value);
                                 number_of_lines = 1;
                             } else {
+                                events.select = start_value.select.clone();
                                 events.start_event = Event::Start(start_value);
                                 has_started = true;
                             }
@@ -348,31 +375,43 @@ impl EventsData {
 
     fn add_event(&mut self, event: Event) {
         match &event {
-            Event::Data(data_value) => match &self.start_event {
+            Event::Data(data_value) => match self.start_event.clone() {
                 Event::Start(start_value) => {
-                    for s in &start_value.group {
-                        match &data_value.data[s] {
-                            Value::Bool(b) => {
-                                self.insert_in_group_map((s.clone(), Groupable::Bool(*b)));
-                            }
-                            Value::Null => {
-                                self.insert_in_group_map((s.clone(), Groupable::Null));
-                            }
-                            Value::Number(n) => match n.as_f64() {
-                                Some(n) => {
-                                    self.insert_in_group_map((s.clone(), Groupable::Number(n)))
+                    match start_value.group.clone() {
+                        Some(group) => {
+                            for s in group {
+                                match &data_value.data.get(&s) {
+                                    Some(data) => match data {
+                                        Value::Bool(b) => {
+                                            self.insert_in_group_map((
+                                                s.clone(),
+                                                Groupable::Bool(*b),
+                                            ));
+                                        }
+                                        Value::Null => {
+                                            self.insert_in_group_map((s.clone(), Groupable::Null));
+                                        }
+                                        Value::Number(n) => match n.as_f64() {
+                                            Some(n) => self.insert_in_group_map((
+                                                s.clone(),
+                                                Groupable::Number(n),
+                                            )),
+                                            None => (),
+                                        },
+                                        Value::String(s_) => {
+                                            self.insert_in_group_map((
+                                                s.clone(),
+                                                Groupable::String(s_.clone()),
+                                            ));
+                                        }
+                                        _ => {}
+                                    },
+                                    None => (),
                                 }
-                                None => (),
-                            },
-                            Value::String(s_) => {
-                                self.insert_in_group_map((
-                                    s.clone(),
-                                    Groupable::String(s_.clone()),
-                                ));
                             }
-                            _ => {}
-                        }
-                    }
+                        },
+                        None => ()
+                    };
                 }
                 _ => (),
             },
@@ -381,7 +420,20 @@ impl EventsData {
         self.events.push(event);
     }
 
-    fn insert_in_group_map(&self, value: (String, Groupable)) {}
+    fn insert_in_group_map(&mut self, value: (String, Groupable)) {
+        let group_key = &value.0;
+        match self.group_map.get_mut(group_key) {
+            Some(arr) => {
+                if !arr.contains(&value) {
+                    arr.push(value.clone())
+                }
+            }
+            None => {
+                self.group_map
+                    .insert(group_key.clone(), [value.clone()].to_vec());
+            }
+        }
+    }
 
     pub fn dataset_vec(&self) -> JsValue {
         let dataset = self.dataset_from_events_data();
@@ -389,49 +441,54 @@ impl EventsData {
     }
 
     fn dataset_from_events_data(&self) -> Vec<DataSet> {
-        if self.select.len() > 0 {
-            match self.start_event.clone() {
-                Event::Start(start_value) => {
-                    let group_values: Vec<Vec<(String, Groupable)>> =
-                        self.group_map.values().map(|v| v.clone()).collect();
+        match self.select.clone() {
+            Some(select) => {
+                if select.len() > 0 {
+                    match self.start_event.clone() {
+                        Event::Start(start_value) => {
+                            let group_values: Vec<Vec<(String, Groupable)>> =
+                                self.group_map.values().map(|v| v.clone()).collect();
+                            let mut data_sets: Vec<DataSet> = {
+                                let mut sets: Vec<DataSet> = Vec::new();
+                                if group_values.len() > 0 {
+                                    let mut groups = cartesian_product(group_values);
+                                    for s in select {
+                                        let mut sets_group: Vec<DataSet> = groups
+                                            .iter()
+                                            .map(|v| DataSet {
+                                                points: Vec::new(),
+                                                selection: s.clone(),
+                                                group: v.to_vec(),
+                                            })
+                                            .collect();
+                                        sets.append(&mut sets_group)
+                                    }
+                                } else {
+                                    for s in select {
+                                        sets.push(DataSet {
+                                            points: Vec::new(),
+                                            selection: s.clone(),
+                                            group: Vec::new(),
+                                        });
+                                    }
+                                }
+                                sets
+                            };
+                            let mut vec_points = self.get_points_from_datasets(&data_sets);
+                            for dataset_idx in 0..data_sets.len() {
+                                data_sets[dataset_idx]
+                                    .points
+                                    .append(&mut vec_points[dataset_idx])
+                            }
 
-                    let mut data_sets: Vec<DataSet> = {
-                        let mut sets: Vec<DataSet> = Vec::new();
-                        if group_values.len() > 0 {
-                            let mut groups = cartesian_product(group_values);
-                            for s in start_value.select {
-                                let mut sets_group: Vec<DataSet> = groups
-                                    .iter()
-                                    .map(|v| DataSet {
-                                        points: Vec::new(),
-                                        selection: s.clone(),
-                                        group: v.to_vec(),
-                                    })
-                                    .collect();
-                                sets.append(&mut sets_group)
-                            }
-                        } else {
-                            for s in start_value.select {
-                                sets.push(DataSet {
-                                    points: Vec::new(),
-                                    selection: s.clone(),
-                                    group: Vec::new(),
-                                });
-                            }
+                            return data_sets;
                         }
-                        sets
+                        _ => {}
                     };
-                    let mut vec_points = self.get_points_from_datasets(&data_sets);
-                    for dataset_idx in 0..data_sets.len() {
-                        data_sets[dataset_idx]
-                            .points
-                            .append(&mut vec_points[dataset_idx])
-                    }
-                    return data_sets;
-                }
-                _ => {}
-            };
-        };
+                };
+            },
+            _ => (),
+        }
         Vec::new()
     }
 

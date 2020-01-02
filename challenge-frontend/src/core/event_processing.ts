@@ -15,6 +15,13 @@ export interface DataSet {
   points: Point[]
 }
 
+function measureTime(fun: any, name: string = "fun") {
+  const t0 = performance.now();
+  const result = fun();
+  const t1 = performance.now();
+  console.log(`Call to ${name} took ` + (t1 - t0) + ` milliseconds.`);
+  return result
+}
 export function processText(
   events: Events | undefined
 ): ChartData<chartjs.ChartData>[] {
@@ -23,8 +30,12 @@ export function processText(
     for (let i = 0; i < events.events_count(); i++) {
       let eventsData = events.get_events_data_by_idx(i)
       if (eventsData) {
-        const dataSets: DataSet[] = eventsData.dataset_vec()
-        const processedDataSets = dataSets.map(dataset => {
+        const dataSets: DataSet[] = measureTime(() => {
+          if (eventsData) {
+            return eventsData.dataset_vec();
+          } else return []
+        }, "dataset_vec")
+        const processedDataSets = measureTime(() => dataSets.map(dataset => {
           let color = randomColor()
           let colorA1 = `rgba(${color.red}, ${color.green}, ${color.blue}, 1)`
           let colorA0_4 = `rgba(${color.red}, ${color.green}, ${color.blue}, 0.4)`
@@ -44,7 +55,7 @@ export function processText(
               y: point.value,
             })),
           }
-        })
+        }),)
         data.push({ datasets: processedDataSets })
       }
     }

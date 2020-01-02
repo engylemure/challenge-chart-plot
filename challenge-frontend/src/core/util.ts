@@ -19,13 +19,28 @@ export function capitalize(s: string): string {
   return s.charAt(0).toUpperCase() + s.slice(1)
 }
 
+export function getValueFromGroup(groupValue: any): string {
+  if (groupValue.String) {
+    return groupValue.String
+  } else if (groupValue.Number) {
+    return groupValue.Number
+  } else if (groupValue.Bool) {
+    return groupValue.Bool
+  } else if (groupValue.Null) {
+    return "Null"
+  } else {
+    return ""
+  }
+}
+
 export function generateLabelFromDataSetInfo(
-  group: string[],
+  group: any[],
   selection: string
 ): string {
-  let osInfo = group[0] ? `${capitalize(group[0])} ` : ''
-  let browserInfo = group[1] ? `${capitalize(group[1])} ` : ''
-  return `${osInfo}${browserInfo}${selection
+  let groupInfo = group.map(([keyName, value]) => {
+    return `${capitalize(keyName)}: ${capitalize(getValueFromGroup(value))}`
+  }).join(", ")
+  return `${groupInfo ? groupInfo + ', ': ''}${selection
     .split('_')
     .reduce(
       (acc: string, value: string) =>

@@ -24,6 +24,6 @@ for dynamic and responsive graphics generation (A react wrapper from the well-kn
 
 
 ### TODO
-* Add processing functionality for more flexible data event and possible selection and grouping via start event
+* Find performance improvements
 * Add Test suite for the RUST implementation
 * Add JavaScript testing
