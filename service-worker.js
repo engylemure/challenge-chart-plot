@@ -14,7 +14,7 @@
 importScripts("https://storage.googleapis.com/workbox-cdn/releases/4.3.1/workbox-sw.js");
 
 importScripts(
-  "/challenge-chart-plot/precache-manifest.8da9f77eef0eb1c9f55d1fd74cb71535.js"
+  "/challenge-chart-plot/precache-manifest.4b8d3a8439e738af0d81501c8e61db67.js"
 );
 
 self.addEventListener('message', (event) => {
