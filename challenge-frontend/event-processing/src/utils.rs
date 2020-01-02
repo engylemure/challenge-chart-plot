@@ -1,4 +1,4 @@
-use regex::{Regex, Captures};
+use regex::{Captures, Regex};
 
 pub fn set_panic_hook() {
     // When the `console_error_panic_hook` feature is enabled, we can call the
@@ -18,7 +18,10 @@ pub fn line_transformation(line: &str) -> String {
         static ref RE2: Regex = Regex::new(r"'([^']+)'").unwrap();
     }
     let line_transformed = String::from(RE1.replace_all(&line.clone(), add_quotes_to_key).as_ref());
-    String::from(RE2.replace_all(line_transformed.as_str(), change_single_quotes_too_double).as_ref())
+    String::from(
+        RE2.replace_all(line_transformed.as_str(), change_single_quotes_too_double)
+            .as_ref(),
+    )
 }
 
 /// Function for adding double quotes into key values for usage in line_transformation.
@@ -29,4 +32,66 @@ pub fn add_quotes_to_key(caps: &Captures) -> String {
 /// Function for changing any single quote usage in the JSON line into double quote for usage in the line_transformation.
 pub fn change_single_quotes_too_double(caps: &Captures) -> String {
     format!("\"{}\"", &caps[1])
+}
+
+/// Given a vector containing a partial Cartesian product, and a list of items,
+/// return a vector adding the list of items to the partial Cartesian product.
+///
+/// # Example
+///
+/// ```
+/// let partial_product = vec![vec![1, 4], vec![1, 5], vec![2, 4], vec![2, 5]];
+/// let items = &[6, 7];
+/// let next_product = partial_cartesian(partial_product, items);
+/// assert_eq!(next_product, vec![vec![1, 4, 6],
+///                               vec![1, 4, 7],
+///                               vec![1, 5, 6],
+///                               vec![1, 5, 7],
+///                               vec![2, 4, 6],
+///                               vec![2, 4, 7],
+///                               vec![2, 5, 6],
+///                               vec![2, 5, 7]]);
+/// ```
+pub fn partial_cartesian<T: Clone>(a: Vec<Vec<T>>, b: Vec<T>) -> Vec<Vec<T>> {
+    a.into_iter()
+        .flat_map(|xs| {
+            b.iter()
+                .cloned()
+                .map(|y| {
+                    let mut vec = xs.clone();
+                    vec.push(y);
+                    vec
+                })
+                .collect::<Vec<_>>()
+        })
+        .collect()
+}
+
+/// Computes the Cartesian product of lists[0] * lists[1] * ... * lists[n].
+///
+/// # Example
+///
+/// ```
+/// let lists: &[&[_]] = &[&[1, 2], &[4, 5], &[6, 7]];
+/// let product = cartesian_product(lists);
+/// assert_eq!(product, vec![vec![1, 4, 6],
+///                          vec![1, 4, 7],
+///                          vec![1, 5, 6],
+///                          vec![1, 5, 7],
+///                          vec![2, 4, 6],
+///                          vec![2, 4, 7],
+///                          vec![2, 5, 6],
+///                          vec![2, 5, 7]]);
+/// ```
+pub fn cartesian_product<T: Clone>(lists: Vec<Vec<T>>) -> Vec<Vec<T>> {
+    match lists.split_first() {
+        Some((first, rest)) => {
+            let init: Vec<Vec<T>> = first.iter().cloned().map(|n| vec![n]).collect();
+
+            rest.iter()
+                .cloned()
+                .fold(init, |vec, list| partial_cartesian(vec, list))
+        }
+        None => vec![],
+    }
 }

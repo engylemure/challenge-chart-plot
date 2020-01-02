@@ -1,8 +1,8 @@
-use serde_json::{Result, Value, Map};
 use serde::{Deserialize, Serialize};
+use serde_json::{Map, Result, Value};
+use std::collections::HashMap;
 use std::fmt;
 use wasm_bindgen::prelude::*;
-use std::collections::HashMap;
 
 pub mod utils;
 
@@ -10,7 +10,6 @@ use utils::*;
 
 #[macro_use]
 extern crate lazy_static;
-
 
 extern crate web_sys;
 
@@ -28,7 +27,7 @@ extern crate web_sys;
 static ALLOC: wee_alloc::WeeAlloc = wee_alloc::WeeAlloc::INIT;
 
 #[wasm_bindgen]
-extern {
+extern "C" {
     fn alert(s: &str);
 }
 
@@ -63,10 +62,7 @@ pub struct StopValue {
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct DataValue {
     timestamp: u64,
-    os: String,
-    browser: String,
-    min_response_time: f32,
-    max_response_time: f32,
+    data: Map<String, Value>,
 }
 
 /// enum for defining the possible Event types accepted by the process
@@ -83,7 +79,7 @@ pub enum Event {
 #[wasm_bindgen]
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Point {
-    value: f32,
+    value: f64,
     timestamp: u64,
 }
 
@@ -93,9 +89,8 @@ pub struct Point {
 pub struct DataSet {
     points: Vec<Point>,
     selection: String,
-    group: (Option<String>, Option<String>),
+    group: Vec<(String, Groupable)>,
 }
-
 
 impl DataSet {
     pub fn selection(&self) -> String {
@@ -107,44 +102,76 @@ impl DataSet {
     }
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+enum Groupable {
+    Bool(bool),
+    String(String),
+    Number(f64),
+    Null,
+}
+
 #[wasm_bindgen]
 impl Point {
-    pub fn value(&self) -> f32 {
+    pub fn value(&self) -> f64 {
         self.value
     }
     pub fn timestamp(&self) -> u64 {
         self.timestamp
     }
 
-    fn from(event: Event, selection: String, os: Option<String>, browser: Option<String>) -> Option<Point> {
+    fn from(event: Event, selection: String, group: Vec<(String, Groupable)>) -> Option<Point> {
         match event {
             Event::Data(data_value) => {
                 let mut point = Point {
                     value: 0.0,
                     timestamp: data_value.timestamp,
                 };
-                if selection == String::from("min_response_time") {
-                    point.value = data_value.min_response_time;
-                } else if selection == String::from("max_response_time") {
-                    point.value = data_value.max_response_time;
-                } else {
-                    return None;
-                }
-                let is_in_os = match os {
-                    Some(os) => data_value.os == os,
-                    None => true
+                let is_in_group = {
+                    let mut is = true;
+                    for g in group {
+                        is = is
+                            && match &data_value.data[&g.0] {
+                                Value::Bool(d_value) => match g.1 {
+                                    Groupable::Bool(g_value) => g_value == *d_value,
+                                    _ => false,
+                                },
+                                Value::Null => match g.1 {
+                                    Groupable::Null => true,
+                                    _ => false,
+                                },
+                                Value::String(d_s) => match g.1 {
+                                    Groupable::String(g_value) => g_value == *d_s,
+                                    _ => false,
+                                },
+                                Value::Number(d_n) => match d_n.as_f64() {
+                                    Some(n) => match g.1 {
+                                        Groupable::Number(g_value) => g_value == n,
+                                        _ => false,
+                                    },
+                                    None => false,
+                                },
+                                _ => false,
+                            }
+                    }
+                    is
                 };
-                let is_in_browser = match browser {
-                    Some(browser) => data_value.browser == browser,
-                    None => true
-                };
-                if is_in_browser && is_in_os {
-                    Some(point)
-                } else {
-                    None
+                if is_in_group {
+                    match &data_value.data[&selection] {
+                        Value::Number(number) => {
+                            return match number.as_f64() {
+                                Some(n) => Some({
+                                    point.value = n;
+                                    point
+                                }),
+                                None => None,
+                            }
+                        }
+                        _ => {}
+                    };
                 }
+                None
             }
-            _ => None
+            _ => None,
         }
     }
 }
@@ -158,15 +185,27 @@ impl Event {
             Value::String(value) => match value.as_str() {
                 "start" => Event::Start(serde_json::from_value(Value::Object(map))?),
                 "span" => Event::Span(serde_json::from_value(Value::Object(map))?),
-                "data" => Event::Data(serde_json::from_value(Value::Object(map))?),
+                "data" => {
+                    let timestamp: Option<u64> = match &map["timestamp"] {
+                        Value::Number(number) => number.as_u64(),
+                        _ => unimplemented!(),
+                    };
+                    if timestamp.is_some() {
+                        Event::Data(DataValue {
+                            timestamp: timestamp.unwrap(),
+                            data: map.clone(),
+                        })
+                    } else {
+                        Event::Unknown
+                    }
+                }
                 "stop" => Event::Stop(serde_json::from_value(Value::Object(map))?),
-                _ => Event::Unknown
+                _ => Event::Unknown,
             },
-            _ => Event::Unknown
+            _ => Event::Unknown,
         })
     }
 }
-
 
 #[wasm_bindgen]
 #[derive(Debug, Clone)]
@@ -175,8 +214,8 @@ pub struct EventsData {
     span_event: Event,
     start_event: Event,
     stop_event: Event,
-    os_map: HashMap<String, bool>,
-    browser_map: HashMap<String, bool>,
+    select: Vec<String>,
+    group_map: HashMap<String, Vec<(String, Groupable)>>,
     number_of_lines: u64,
 }
 
@@ -187,8 +226,8 @@ impl Default for EventsData {
             span_event: Event::Unknown,
             start_event: Event::Unknown,
             stop_event: Event::Unknown,
-            os_map: HashMap::new(),
-            browser_map: HashMap::new(),
+            select: Vec::new(),
+            group_map: HashMap::new(),
             number_of_lines: 0,
         }
     }
@@ -252,11 +291,11 @@ impl EventsData {
             let string_line = line_transformation(line);
             let v: Value = match serde_json::from_str(string_line.as_str()) {
                 Ok(result) => result,
-                _ => Value::Null
+                _ => Value::Null,
             };
             let event_result = match v {
                 Value::Object(map) => Event::from_map(map),
-                _ => Ok(Event::Unknown)
+                _ => Ok(Event::Unknown),
             };
             match event_result {
                 Ok(event) => {
@@ -309,14 +348,40 @@ impl EventsData {
 
     fn add_event(&mut self, event: Event) {
         match &event {
-            Event::Data(data_value) => {
-                self.browser_map.insert(data_value.browser.clone(), true);
-                self.os_map.insert(data_value.os.clone(), true);
-            }
+            Event::Data(data_value) => match &self.start_event {
+                Event::Start(start_value) => {
+                    for s in &start_value.group {
+                        match &data_value.data[s] {
+                            Value::Bool(b) => {
+                                self.insert_in_group_map((s.clone(), Groupable::Bool(*b)));
+                            }
+                            Value::Null => {
+                                self.insert_in_group_map((s.clone(), Groupable::Null));
+                            }
+                            Value::Number(n) => match n.as_f64() {
+                                Some(n) => {
+                                    self.insert_in_group_map((s.clone(), Groupable::Number(n)))
+                                }
+                                None => (),
+                            },
+                            Value::String(s_) => {
+                                self.insert_in_group_map((
+                                    s.clone(),
+                                    Groupable::String(s_.clone()),
+                                ));
+                            }
+                            _ => {}
+                        }
+                    }
+                }
+                _ => (),
+            },
             _ => {}
         };
         self.events.push(event);
     }
+
+    fn insert_in_group_map(&self, value: (String, Groupable)) {}
 
     pub fn dataset_vec(&self) -> JsValue {
         let dataset = self.dataset_from_events_data();
@@ -324,64 +389,54 @@ impl EventsData {
     }
 
     fn dataset_from_events_data(&self) -> Vec<DataSet> {
-        match self.start_event.clone() {
-            Event::Start(start_value) => {
-                let mut groups: Vec<(String, Option<String>, Option<String>)> = Vec::new();
-                if start_value.group.len() == 0 {
-                    for selection in start_value.select {
-                        groups.push((selection, None, None));
+        if self.select.len() > 0 {
+            match self.start_event.clone() {
+                Event::Start(start_value) => {
+                    let group_values: Vec<Vec<(String, Groupable)>> =
+                        self.group_map.values().map(|v| v.clone()).collect();
+
+                    let mut data_sets: Vec<DataSet> = {
+                        let mut sets: Vec<DataSet> = Vec::new();
+                        if group_values.len() > 0 {
+                            let mut groups = cartesian_product(group_values);
+                            for s in start_value.select {
+                                let mut sets_group: Vec<DataSet> = groups
+                                    .iter()
+                                    .map(|v| DataSet {
+                                        points: Vec::new(),
+                                        selection: s.clone(),
+                                        group: v.to_vec(),
+                                    })
+                                    .collect();
+                                sets.append(&mut sets_group)
+                            }
+                        } else {
+                            for s in start_value.select {
+                                sets.push(DataSet {
+                                    points: Vec::new(),
+                                    selection: s.clone(),
+                                    group: Vec::new(),
+                                });
+                            }
+                        }
+                        sets
+                    };
+                    let mut vec_points = self.get_points_from_datasets(&data_sets);
+                    for dataset_idx in 0..data_sets.len() {
+                        data_sets[dataset_idx]
+                            .points
+                            .append(&mut vec_points[dataset_idx])
                     }
-                } else {
-                    let group_has_os = start_value.group.contains(&String::from("os"));
-                    let group_has_browser = start_value.group.contains(&String::from("browser"));
-                    if group_has_browser && group_has_os {
-                        for os in self.os_map.keys() {
-                            for browser in self.browser_map.keys() {
-                                for selection in start_value.select.clone() {
-                                    groups.push((selection, Some(os.clone()), Some(browser.clone())));
-                                }
-                            }
-                        }
-                    } else if group_has_browser {
-                        for browser in self.browser_map.keys() {
-                            for selection in start_value.select.clone() {
-                                groups.push((selection, None, Some(browser.clone())));
-                            }
-                        }
-                    } else if group_has_os {
-                        for os in self.os_map.keys() {
-                            for selection in start_value.select.clone() {
-                                groups.push((selection, Some(os.clone()), None));
-                            }
-                        }
-                    } else {
-                        for selection in start_value.select {
-                            groups.push((selection, None, None));
-                        }
-                    }
+                    return data_sets;
                 }
-                let mut data_sets: Vec<DataSet> = groups.iter().map(|v: &(String, Option<String>, Option<String>)| {
-                    DataSet {
-                        points: Vec::new(),
-                        selection: v.0.clone(),
-                        group: (v.1.clone(), v.2.clone()),
-                    }
-                }).collect();
-                let mut vec_points = self.get_points_by_tuples(groups);
-                for dataset_idx in 0..data_sets.len() {
-                    data_sets[dataset_idx].points.append(&mut vec_points[dataset_idx])
-                }
-                return data_sets;
-            }
-            _ => {}
+                _ => {}
+            };
         };
         Vec::new()
     }
 
-    fn get_points_by_tuples(&self, tuples: Vec<(String, Option<String>, Option<String>)>) -> Vec<Vec<Point>> {
-        let mut points: Vec<Vec<Point>> = tuples.iter().map(|_| {
-            Vec::new()
-        }).collect();
+    fn get_points_from_datasets(&self, datasets: &Vec<DataSet>) -> Vec<Vec<Point>> {
+        let mut points: Vec<Vec<Point>> = datasets.iter().map(|_| Vec::new()).collect();
         let mut stop_timestamp: u64 = 0;
         let mut span_begin_timestamp: u64 = 0;
         let mut span_end_timestamp: u64 = 0;
@@ -391,22 +446,27 @@ impl EventsData {
                 span_end_timestamp = span_value.end;
                 true
             }
-            _ => false
+            _ => false,
         };
         let has_stop = match self.stop_event.clone() {
             Event::Stop(stop_value) => {
                 stop_timestamp = stop_value.timestamp;
                 true
             }
-            _ => false
+            _ => false,
         };
         for event in self.events.clone() {
             let mut tuple_idx = 0;
-            for tuple in &tuples {
-                let point = Point::from(event.clone(), tuple.0.clone(), tuple.1.clone(), tuple.2.clone());
+            for d in datasets {
+                let point = Point::from(event.clone(), d.selection().clone(), d.group.clone());
                 match point {
                     Some(point) => {
-                        if ((has_stop && stop_timestamp >= point.timestamp) || !has_stop) && ((has_span && point.timestamp >= span_begin_timestamp && point.timestamp <= span_end_timestamp) || !has_span) {
+                        if ((has_stop && stop_timestamp >= point.timestamp) || !has_stop)
+                            && ((has_span
+                                && point.timestamp >= span_begin_timestamp
+                                && point.timestamp <= span_end_timestamp)
+                                || !has_span)
+                        {
                             points[tuple_idx].push(point);
                         }
                     }
