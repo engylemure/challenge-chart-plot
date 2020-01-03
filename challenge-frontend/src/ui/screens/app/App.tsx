@@ -1,4 +1,4 @@
-import React, { ReactElement, useCallback, useEffect, useState } from 'react'
+import React, { useCallback, useEffect, useState } from 'react'
 import { ThemeProvider } from '@material-ui/styles'
 import { createMuiTheme } from '@material-ui/core'
 import { grey, blue } from '@material-ui/core/colors'
@@ -6,11 +6,9 @@ import DragHandleRounded from '@material-ui/icons/DragHandleRounded'
 import BottomAppBar from '../../components/stateless/bottom_app_bar/BottomAppBar'
 import HeaderAppBar from '../../components/stateless/header_app_bar/HeaderAppBar'
 import DataEditor from '../../components/stateful/data_editor/DataEditor'
-// @ts-ignore
-import { ResizableBox } from 'react-resizable'
+import { Resizable } from "re-resizable";
 import { useWindowSize } from '../../../core/hooks'
 import './App.css'
-import 'react-resizable/css/styles.css'
 import { processEvents, measureTime } from '../../../core/event_processing'
 import { processText, processEventsMapped } from '../../../core/event_processing_without_wasm'
 import ChartSection from '../../components/stateful/chart_section/ChartSection'
@@ -26,12 +24,10 @@ const theme = createMuiTheme({
   },
 })
 
-function handleDragBar(resizeHandle: string): ReactElement<any> {
-  return (
-    <div className={`draggable-icon`}>
-      <DragHandleRounded color={'primary'} />
-    </div>
-  )
+function HandleElement(props: any) {
+  return (<div className={`draggable-icon`}>
+    <DragHandleRounded color={'primary'} />
+  </div>)
 }
 
 function App() {
@@ -74,9 +70,13 @@ function App() {
     })()
   }, [])
 
-  const onResize = (event: any, { element, size, handle }: any) => {
-    setEditorHeight(size.height)
-  }
+  const onResize = (event: any, direction: any, ref: any, delta: any) => {
+    // setEditorHeight((oldEditorHeight) => oldEditorHeight+delta.height)
+    const newHeight = parseInt(ref.style.height.replace("px", ""))
+    if (newHeight) {
+      setEditorHeight(newHeight)
+    }
+  };
 
   const graphHeight = height - editorHeight - 128
   return (
@@ -84,21 +84,42 @@ function App() {
       <ThemeProvider theme={theme}>
         <HeaderAppBar title="Jordao's Challenge" />
         <div style={{ height: height - 128 }}>
-          <ResizableBox
-            height={initialEditorHeight - 64}
-            width={Infinity}
-            axis="y"
-            minConstraints={[0, (height - 128) * 0.25]}
-            maxConstraints={[Infinity, (height - 128) * 0.75]}
-            onResize={onResize}
-            resizeHandles={['s']}
-            handle={handleDragBar}
+          <Resizable
+              enable={{ top:false, right:false, bottom:true, left:false, topRight:false, bottomRight:false, bottomLeft:false, topLeft:false }}
+              defaultSize={{
+                height: initialEditorHeight - 64,
+                width: Infinity
+              }}
+              minWidth={0}
+              maxWidth={width}
+              minHeight={(height - 128) * 0.25}
+              maxHeight={(height - 128) * 0.75}
+              onResize={onResize}
+              // onResizeStop={onResize}
+              handleComponent={{
+                bottom: <HandleElement/>
+              }}
           >
             <DataEditor
-              height={editorHeight}
-              handleEditorChange={handleEditorChange}
+                height={editorHeight}
+                handleEditorChange={handleEditorChange}
             />
-          </ResizableBox>
+          </Resizable>
+          {/*<ResizableBox*/}
+          {/*  height={initialEditorHeight - 64}*/}
+          {/*  width={Infinity}*/}
+          {/*  axis="y"*/}
+          {/*  minConstraints={[0, (height - 128) * 0.25]}*/}
+          {/*  maxConstraints={[Infinity, (height - 128) * 0.75]}*/}
+          {/*  onResize={onResize}*/}
+          {/*  resizeHandles={['s']}*/}
+          {/*  handle={handleDragBar}*/}
+          {/*>*/}
+          {/*  <DataEditor*/}
+          {/*    height={editorHeight}*/}
+          {/*    handleEditorChange={handleEditorChange}*/}
+          {/*  />*/}
+          {/*</ResizableBox>*/}
           <div style={{ height: graphHeight, width }}>
             <ChartSection
               data={data}
