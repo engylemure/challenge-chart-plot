@@ -47,15 +47,12 @@ function App() {
   const onGenerateChartButtonPress = useCallback(async () => {
     if (text && wasm) {
       const [withoutWasmResult,,, withoutElapsedTime] = measureTime(() => processEventsMapped(processText(text)), 'without wasm')
-      const [withWasmResult,,, withElapsedTime] = measureTime(() => {
-        const events = wasm.Events.from_text(text)
-        if (events) {
-          return processEvents(events)
-        } else {
-          return []
-        }
-      }, 'with wasm')
-      setData(withoutElapsedTime < withElapsedTime ? withoutWasmResult : withWasmResult)
+      // const [withWasmResult,,, withElapsedTime] = measureTime(() => {
+      //   return processEvents(wasm.EventsData.process_text(text))
+      // }, 'with wasm')
+      // setData(withWasmResult)
+      setData(withoutWasmResult)
+      // setData(withoutElapsedTime < withElapsedTime ? withoutWasmResult : withWasmResult)
     }
   }, [text, wasm])
   useEffect(() => {

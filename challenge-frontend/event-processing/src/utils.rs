@@ -12,7 +12,7 @@ pub fn set_panic_hook() {
 }
 
 /// Function for parsing some non strict JSON lines into strict JSON format.
-pub fn line_transformation(line: &str) -> String {
+pub fn fix_non_strict_json(line: &str) -> String {
     lazy_static! {
         static ref RE1: Regex = Regex::new(r"([\$\w]+)\s*:").unwrap();
         static ref RE2: Regex = Regex::new(r"'([^']+)'").unwrap();

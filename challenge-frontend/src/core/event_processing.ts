@@ -1,4 +1,3 @@
-import { Events } from 'event_processing/event_processing'
 import { generateLabelFromDataSetInfo, randomColor } from './util'
 // @ts-ignore
 import * as chartjs from 'chart.js'
@@ -23,11 +22,10 @@ export function measureTime(fun: any, name: string = "fun") {
   return [result, t0, t1, t1 - t0]
 }
 export function processEvents(
-  events: Events | undefined
+  datasets: DataSet[][] | undefined
 ): ChartData<chartjs.ChartData>[] {
-  if (events) {
-    const eventsData: DataSet[][] = events.process_events_data()
-    return eventsData.map((dataSets) => {
+  if (datasets) {
+    return datasets.map((dataSets) => {
       const processedDataSets = dataSets.map(dataset => {
         let color = randomColor()
         let colorA1 = `rgba(${color.red}, ${color.green}, ${color.blue}, 1)`
