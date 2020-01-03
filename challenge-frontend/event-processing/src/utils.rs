@@ -18,7 +18,8 @@ pub fn line_transformation(line: &str) -> String {
         static ref RE2: Regex = Regex::new(r"'([^']+)'").unwrap();
     }
     let line_transformed = RE1.replace_all(line, add_quotes_to_key);
-    RE2.replace_all(line_transformed.as_ref(), change_single_quotes_too_double).to_string()
+    RE2.replace_all(line_transformed.as_ref(), change_single_quotes_too_double)
+        .to_string()
 }
 
 /// Function for adding double quotes into key values for usage in line_transformation.

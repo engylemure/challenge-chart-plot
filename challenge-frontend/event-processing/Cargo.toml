@@ -39,6 +39,9 @@ wasm-bindgen-test = "0.2"
 # Tell `rustc` to optimize for small code size.
 opt-level = "s"
 
+[profile.bench] 
+debug = true
+
 [dependencies.web-sys]
 version = "0.3"
 features = [

@@ -1,3 +1,4 @@
+
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Result, Value};
 use std::collections::HashMap;
@@ -5,30 +6,32 @@ use wasm_bindgen::prelude::*;
 
 pub mod utils;
 
+//pub mod benches;
+
 use utils::*;
 
 #[macro_use]
 extern crate lazy_static;
 
-extern crate web_sys;
-use web_sys::console;
+// extern crate web_sys;
+// use web_sys::console;
 
-pub struct Timer<'a> {
-    name: &'a str,
-}
+// pub struct Timer<'a> {
+//     name: &'a str,
+// }
 
-impl<'a> Timer<'a> {
-    pub fn new(name: &'a str) -> Timer<'a> {
-        console::time_with_label(name);
-        Timer { name }
-    }
-}
+// impl<'a> Timer<'a> {
+//     pub fn new(name: &'a str) -> Timer<'a> {
+//         console::time_with_label(name);
+//         Timer { name }
+//     }
+// }
 
-impl<'a> Drop for Timer<'a> {
-    fn drop(&mut self) {
-        console::time_end_with_label(self.name);
-    }
-}
+// impl<'a> Drop for Timer<'a> {
+//     fn drop(&mut self) {
+//         console::time_end_with_label(self.name);
+//     }
+// }
 // A macro to provide `println!(..)`-style syntax for `console.log` logging.
 //macro_rules! log {
 //    ( $( $t:tt )* ) => {
@@ -38,14 +41,9 @@ impl<'a> Drop for Timer<'a> {
 
 // When the `wee_alloc` feature is enabled, use `wee_alloc` as the global
 // allocator.
-#[cfg(feature = "wee_alloc")]
-#[global_allocator]
-static ALLOC: wee_alloc::WeeAlloc = wee_alloc::WeeAlloc::INIT;
-
-#[wasm_bindgen]
-extern "C" {
-    fn alert(s: &str);
-}
+ #[cfg(feature = "wee_alloc")]
+ #[global_allocator]
+ static ALLOC: wee_alloc::WeeAlloc = wee_alloc::WeeAlloc::INIT;
 
 /// struct used for storing the Event Data from the type 'start'
 #[wasm_bindgen]
@@ -102,18 +100,14 @@ pub struct Point {
 /// struct for a DataSet that includes some information about a specific grouping of Events
 #[wasm_bindgen]
 #[derive(Debug, Serialize, Deserialize)]
-pub struct DataSet{
+pub struct DataSet {
     points: Vec<Point>,
     selection: String,
     group: Vec<(String, Groupable)>,
 }
 
 impl DataSet {
-    pub fn new(
-        selection: String,
-        group: Vec<(String, Groupable)>,
-        points: Vec<Point>,
-    ) -> DataSet {
+    pub fn new(selection: String, group: Vec<(String, Groupable)>, points: Vec<Point>) -> DataSet {
         DataSet {
             points,
             selection,
@@ -304,25 +298,26 @@ impl Events {
         self.events.len()
     }
 
-    pub fn process_events_data(&self) -> JsValue {
-        let processed_events: Vec<Vec<DataSet>> = self
-            .events
+    fn _process_events_data(&self) -> Vec<Vec<DataSet>> {
+        self.events
             .iter()
             .map(|v| v.dataset_from_events_data())
-            .collect();
-        serde_wasm_bindgen::to_value(&processed_events).unwrap()
+            .collect()
     }
+     pub fn process_events_data(&self) -> JsValue {
+         serde_wasm_bindgen::to_value(&self._process_events_data()).unwrap()
+     }
 }
 
 impl EventsData {
     fn from_text(text: &str) -> (Vec<EventsData>, usize) {
-        let _timer = Timer::new("Events::from_text");
+        // let _timer = Timer::new("Events::from_text");
         let mut events_vec: Vec<EventsData> = Vec::new();
         let mut events = EventsData::default();
         let mut number_of_lines: usize = 0;
         let mut has_started = false;
         {
-            let _timer1 = Timer::new("Events::from_text#line_loop");
+            // let _timer1 = Timer::new("Events::from_text#line_loop");
             for line in text.lines() {
                 number_of_lines += 1;
                 let string_line = line_transformation(line);
@@ -423,10 +418,10 @@ impl EventsData {
         }
     }
 
-    pub fn dataset_vec(&self) -> JsValue {
-        let dataset = self.dataset_from_events_data();
-        serde_wasm_bindgen::to_value(&dataset).unwrap()
-    }
+    // pub fn dataset_vec(&self) -> JsValue {
+    //     let dataset = self.dataset_from_events_data();
+    //     serde_wasm_bindgen::to_value(&dataset).unwrap()
+    // }
 
     fn dataset_from_events_data<'a>(&self) -> Vec<DataSet> {
         match &self.start {
