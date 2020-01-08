@@ -1,0 +1,1 @@
+export {processEventsMapped, processText} from "./../src/core/event_processing_without_wasm";
