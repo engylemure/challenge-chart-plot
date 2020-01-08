@@ -1,24 +1,24 @@
 {
   "files": {
     "main.css": "/challenge-chart-plot/static/css/main.9a981582.chunk.css",
-    "main.js": "/challenge-chart-plot/static/js/main.6f3eaef7.chunk.js",
-    "main.js.map": "/challenge-chart-plot/static/js/main.6f3eaef7.chunk.js.map",
-    "runtime-main.js": "/challenge-chart-plot/static/js/runtime-main.64d2a4e0.js",
-    "runtime-main.js.map": "/challenge-chart-plot/static/js/runtime-main.64d2a4e0.js.map",
-    "static/js/2.ac04df6f.chunk.js": "/challenge-chart-plot/static/js/2.ac04df6f.chunk.js",
-    "static/js/2.ac04df6f.chunk.js.map": "/challenge-chart-plot/static/js/2.ac04df6f.chunk.js.map",
-    "static/js/3.ccd69086.chunk.js": "/challenge-chart-plot/static/js/3.ccd69086.chunk.js",
+    "main.js": "/challenge-chart-plot/static/js/main.9add4f58.chunk.js",
+    "main.js.map": "/challenge-chart-plot/static/js/main.9add4f58.chunk.js.map",
+    "runtime-main.js": "/challenge-chart-plot/static/js/runtime-main.e7da6c85.js",
+    "runtime-main.js.map": "/challenge-chart-plot/static/js/runtime-main.e7da6c85.js.map",
+    "static/js/2.dbce843f.chunk.js": "/challenge-chart-plot/static/js/2.dbce843f.chunk.js",
+    "static/js/2.dbce843f.chunk.js.map": "/challenge-chart-plot/static/js/2.dbce843f.chunk.js.map",
+    "static/js/3.82e0375e.chunk.js": "/challenge-chart-plot/static/js/3.82e0375e.chunk.js",
     "a11e3fc607ba018cfd5d.module.wasm": "/challenge-chart-plot/a11e3fc607ba018cfd5d.module.wasm",
-    "static/js/3.ccd69086.chunk.js.map": "/challenge-chart-plot/static/js/3.ccd69086.chunk.js.map",
+    "static/js/3.82e0375e.chunk.js.map": "/challenge-chart-plot/static/js/3.82e0375e.chunk.js.map",
     "index.html": "/challenge-chart-plot/index.html",
-    "precache-manifest.d715957147984bcc857254d1658cb16b.js": "/challenge-chart-plot/precache-manifest.d715957147984bcc857254d1658cb16b.js",
+    "precache-manifest.079153d54b68603a0332f7c1b53f2865.js": "/challenge-chart-plot/precache-manifest.079153d54b68603a0332f7c1b53f2865.js",
     "service-worker.js": "/challenge-chart-plot/service-worker.js",
     "static/css/main.9a981582.chunk.css.map": "/challenge-chart-plot/static/css/main.9a981582.chunk.css.map"
   },
   "entrypoints": [
-    "static/js/runtime-main.64d2a4e0.js",
-    "static/js/2.ac04df6f.chunk.js",
+    "static/js/runtime-main.e7da6c85.js",
+    "static/js/2.dbce843f.chunk.js",
     "static/css/main.9a981582.chunk.css",
-    "static/js/main.6f3eaef7.chunk.js"
+    "static/js/main.9add4f58.chunk.js"
   ]
 }
