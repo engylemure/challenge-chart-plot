@@ -1,5 +1,5 @@
 use serde::{Deserialize, Serialize};
-use serde_json::{Map, Value, json};
+use serde_json::{Map, Value, json, Error};
 use std::collections::HashMap;
 use wasm_bindgen::prelude::*;
 
@@ -8,6 +8,7 @@ pub mod utils;
 //pub mod benches;
 
 use utils::*;
+use splines::{Key, Interpolation, Spline};
 
 #[macro_use]
 extern crate lazy_static;
@@ -32,11 +33,11 @@ extern crate lazy_static;
 //     }
 // }
 // A macro to provide `println!(..)`-style syntax for `console.log` logging.
-//macro_rules! log {
-//    ( $( $t:tt )* ) => {
-//        web_sys::console::log_1(&format!( $( $t )* ).into());
-//    }
-// }
+macro_rules! log {
+    ( $( $t:tt )* ) => {
+        web_sys::console::log_1(&format!( $( $t )* ).into());
+    }
+ }
 
 // When the `wee_alloc` feature is enabled, use `wee_alloc` as the global
 // allocator.
@@ -46,7 +47,7 @@ static ALLOC: wee_alloc::WeeAlloc = wee_alloc::WeeAlloc::INIT;
 
 /// struct used for storing the Event Data from the type 'start'
 #[wasm_bindgen]
-#[derive(Serialize, Deserialize, Clone)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct StartValue {
     timestamp: u64,
     select: Option<Vec<String>>,
@@ -55,7 +56,7 @@ pub struct StartValue {
 
 /// struct used for storing the Event Data from the type 'span'
 #[wasm_bindgen]
-#[derive(Serialize, Deserialize, Clone)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct SpanValue {
     timestamp: u64,
     begin: u64,
@@ -64,7 +65,7 @@ pub struct SpanValue {
 
 /// struct used for storing the Event Data from the type 'stop'
 #[wasm_bindgen]
-#[derive(Serialize, Deserialize, Clone)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct StopValue {
     timestamp: u64,
 }
@@ -72,7 +73,7 @@ pub struct StopValue {
 /// struct used for storing the Event Data from the type 'data'
 // TODO: It seems that this struct is not generic enough so we will need to refactor the dataset generation
 #[wasm_bindgen]
-#[derive(Serialize, Deserialize, Clone)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct DataValue {
     timestamp: u64,
     data: Map<String, Value>,
@@ -90,7 +91,7 @@ pub enum Event {
 
 /// struct for a Point information from a Event
 #[wasm_bindgen]
-#[derive(Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize)]
 pub struct Point {
     value: f64,
     timestamp: u64,
@@ -248,7 +249,7 @@ impl From<Map<String,Value>> for Event {
 }
 
 #[wasm_bindgen]
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 pub struct EventsData {
     data_events: Vec<DataValue>,
     span: Option<SpanValue>,
@@ -269,12 +270,87 @@ impl Default for EventsData {
     }
 }
 
+fn datasets_interpolated(datasets: Vec<DataSet>, should_interpolate: bool, interpolate_interval: u64) -> Vec<DataSet> {
+    datasets.iter().map(|d| {
+        if should_interpolate && d.points.len() > (interpolate_interval as usize) {
+            let keys: Vec<Key<f64, f64>> = d.points.iter().map(|p| {
+                Key::new(p.timestamp as f64, p.value, Interpolation::default())
+            }).collect();
+            let spline = Spline::from_vec(keys);
+            let first = d.points.first();
+            let last = d.points.last();
+            if let Some(f_value) = first {
+                if let Some(l_value) = last {
+                    let mut points: Vec<Point>  = Vec::new();
+                    let interval = (l_value.timestamp - f_value.timestamp)/interpolate_interval;
+                    for i in 0..interpolate_interval {
+                        let key = f_value.timestamp + i*interval;
+                        points.push(Point {
+                            timestamp: key,
+                            value: spline.clamped_sample(key as f64).expect("Failed in clamping")
+                        })
+                    }
+                    return DataSet::new(d.selection.clone(), d.group.clone(), points)
+                }
+            }
+        }
+        DataSet::new(d.selection.clone(), d.group.clone(), d.points.to_vec())
+    }).collect()
+}
+
 #[wasm_bindgen]
 impl EventsData {
     pub fn process_text(text: &str) -> JsValue {
        let (events_data, _) = EventsData::from_text(text);
        let datasets: Vec<Vec<DataSet>> = events_data.iter().map(|v| v.dataset_from_events_data()).collect();
        serde_wasm_bindgen::to_value(&datasets).unwrap() 
+    }
+
+
+    pub fn process_js_value(value: JsValue, should_interpolate: bool, interpolate_interval: u64) -> JsValue {
+        match value.into_serde::<Value>() {
+            Ok(serde_value) => match serde_value {
+                Value::Array(values) => {
+                    let mut events_data_vec: Vec<EventsData> = Vec::new();
+                    for value in values.iter().cloned() {
+                        if let Value::Object(map) = value {
+                            events_data_vec.push(EventsData::from(map))
+                        }
+                    }
+                    let datasets: Vec<Vec<DataSet>> = events_data_vec.iter().map(|v| datasets_interpolated(v.dataset_from_events_data(), should_interpolate, interpolate_interval)).collect();
+                    serde_wasm_bindgen::to_value(&datasets).unwrap()
+                },
+                Value::Object(value) => {
+                    let events_data = vec![EventsData::from(value)];
+                    let datasets: Vec<Vec<DataSet>> = events_data.iter().map(|v| {
+                        datasets_interpolated(v.dataset_from_events_data(), should_interpolate, interpolate_interval)
+                    }).collect();
+                    serde_wasm_bindgen::to_value(&datasets).unwrap()
+                },
+                _ => JsValue::NULL
+            },
+            Err(_) => JsValue::NULL,
+        }
+    }
+}
+
+impl From<Map<String, Value>> for EventsData {
+    fn from(map: Map<String, Value>) -> EventsData {
+        let mut new = EventsData {
+            data_events: Vec::new(),
+            span: serde_json::from_value(map["span"].clone()).unwrap(),
+            start: serde_json::from_value(map["start"].clone()).unwrap(),
+            stop: serde_json::from_value(map["stop"].clone()).unwrap(),
+            group_map: HashMap::new()
+        };
+        if let Value::Array(values) = map["data_events"].clone() {
+            for value in values {
+                if let Ok(data) = serde_json::from_value::<DataValue>(value) {
+                    new.add_data_value(data);
+                }
+            }
+        }
+        new
     }
 }
 
@@ -453,3 +529,5 @@ impl EventsData {
         points
     }
 }
+
+

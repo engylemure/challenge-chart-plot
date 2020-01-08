@@ -44,7 +44,7 @@ const ChartSection = (props: ChartSectionProps) => {
       scales: {
         xAxes: [
           {
-            type: 'linear',
+            type: 'time',
             display: true,
             labelString: 'Milliseconds',
             ticks: {

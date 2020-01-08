@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from 'react'
+import React, {useCallback, useEffect, useState} from 'react'
 import { ThemeProvider } from '@material-ui/styles'
 import { createMuiTheme } from '@material-ui/core'
 import { grey, blue } from '@material-ui/core/colors'
@@ -10,8 +10,11 @@ import { Resizable } from "re-resizable";
 import { useWindowSize } from '../../../core/hooks'
 import './App.css'
 import { processEvents, measureTime } from '../../../core/event_processing'
-import { processText, processEventsMapped } from '../../../core/event_processing_without_wasm'
+import {processText, processEventsMapped, processTextToWasm} from '../../../core/event_processing_without_wasm'
 import ChartSection from '../../components/stateful/chart_section/ChartSection'
+// import WebWorker from "../../../core/worker_setup";
+// import myWorker from "../../../core/event_processing_worker"
+import debounce from 'lodash/debounce'
 
 const theme = createMuiTheme({
   palette: {
@@ -32,11 +35,14 @@ function HandleElement(props: any) {
 
 function App() {
   const [text, setText] = useState('')
+  const [webWorker, setWW] = useState()
   const [wasm, setWASM] = useState()
   const [data, setData] = useState([{ datasets: [] }])
   const [editorHeight, setEditorHeight] = useState(0)
+  const [interpolateInterval, setInterpolateInterval] = useState(100)
   const [width, height] = useWindowSize()
   const [initialEditorHeight, setInitialEditorHeight] = useState(0)
+  const [shouldInterpolate, setShouldInterpolate] = useState(true)
 
   const handleEditorChange = (ev: any, value: string | undefined) => {
     if (value) {
@@ -47,14 +53,15 @@ function App() {
   const onGenerateChartButtonPress = useCallback(async () => {
     if (text && wasm) {
       const [withoutWasmResult,,, withoutElapsedTime] = measureTime(() => processEventsMapped(processText(text)), 'without wasm')
-      // const [withWasmResult,,, withElapsedTime] = measureTime(() => {
-      //   return processEvents(wasm.EventsData.process_text(text))
-      // }, 'with wasm')
+      const [withWasmResult,,, withElapsedTime] = measureTime(() => {
+        return wasm.EventsData.process_js_value(processTextToWasm(text), shouldInterpolate, BigInt(interpolateInterval))
+      }, 'with wasm')
+      setData(processEvents(withWasmResult))
       // setData(withWasmResult)
-      setData(withoutWasmResult)
+      // setData(withoutWasmResult)
       // setData(withoutElapsedTime < withElapsedTime ? withoutWasmResult : withWasmResult)
     }
-  }, [text, wasm])
+  }, [shouldInterpolate, interpolateInterval, webWorker, text, wasm])
   useEffect(() => {
     if (initialEditorHeight === 0) {
       setInitialEditorHeight(height / 2)
@@ -66,9 +73,13 @@ function App() {
       setWASM(await import('event_processing/event_processing'))
     })()
   }, [])
-
+  // useEffect(() => {
+  //   setWW(new WebWorker(myWorker))
+  // }, [])
+  const onInterpolateIntervalChange = useCallback(debounce((value: any) => {
+    setInterpolateInterval(value && value > 2 ? value: 2)
+  }, 500, { leading: false }), [])
   const onResize = (event: any, direction: any, ref: any, delta: any) => {
-    // setEditorHeight((oldEditorHeight) => oldEditorHeight+delta.height)
     const newHeight = parseInt(ref.style.height.replace("px", ""))
     if (newHeight) {
       setEditorHeight(newHeight)
@@ -92,7 +103,6 @@ function App() {
               minHeight={(height - 128) * 0.25}
               maxHeight={(height - 128) * 0.75}
               onResize={onResize}
-              // onResizeStop={onResize}
               handleComponent={{
                 bottom: <HandleElement/>
               }}
@@ -102,21 +112,6 @@ function App() {
                 handleEditorChange={handleEditorChange}
             />
           </Resizable>
-          {/*<ResizableBox*/}
-          {/*  height={initialEditorHeight - 64}*/}
-          {/*  width={Infinity}*/}
-          {/*  axis="y"*/}
-          {/*  minConstraints={[0, (height - 128) * 0.25]}*/}
-          {/*  maxConstraints={[Infinity, (height - 128) * 0.75]}*/}
-          {/*  onResize={onResize}*/}
-          {/*  resizeHandles={['s']}*/}
-          {/*  handle={handleDragBar}*/}
-          {/*>*/}
-          {/*  <DataEditor*/}
-          {/*    height={editorHeight}*/}
-          {/*    handleEditorChange={handleEditorChange}*/}
-          {/*  />*/}
-          {/*</ResizableBox>*/}
           <div style={{ height: graphHeight, width }}>
             <ChartSection
               data={data}
@@ -127,7 +122,15 @@ function App() {
             />
           </div>
         </div>
-        <BottomAppBar onGenerateChartButtonPress={onGenerateChartButtonPress} />
+        <BottomAppBar
+            onGenerateChartButtonPress={onGenerateChartButtonPress}
+            shouldInterpolate={shouldInterpolate}
+            onCheckBoxPressed={(event, value) => {
+              setShouldInterpolate(value)
+            }}
+            defaultInterpolateInterval={interpolateInterval}
+            onInterpolateIntervalChange={(event) => onInterpolateIntervalChange(parseInt(event.target.value))}
+        />
       </ThemeProvider>
     </div>
   )

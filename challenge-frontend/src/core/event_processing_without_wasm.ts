@@ -23,6 +23,7 @@ export interface SpanEvent extends EventBase {
 }
 
 export interface DataEvent extends EventBase, Object {
+  data?: any
 }
 
 export class Point {
@@ -67,6 +68,42 @@ export class DataSet {
   }
 }
 
+export class EventsData {
+  start?: StartEvent;
+  stop?: StopEvent;
+  span?: SpanEvent;
+  data_events: DataEvent[];
+  group_map: any;
+
+  constructor() {
+    this.data_events = []
+    this.group_map = {}
+  }
+
+  addDataEvent(eventData: any) {
+    const { type, timestamp, ...data } = eventData
+    this.data_events.push({ type, timestamp, data })
+    if (this.start && this.start.group) {
+      for (let groupIdx in this.start.group) {
+        let groupKey = this.start.group[groupIdx]
+        let value = eventData[groupKey]
+        if (value) {
+          this._insertInGroupMap(groupKey, value)
+        }
+      }
+    }
+  }
+
+  _insertInGroupMap(key: string, value: any) {
+    if (this.group_map[key]) {
+      this.group_map[key][value] = true
+    } else {
+      this.group_map[key] = {
+        [value]: true
+      }
+    }
+  }
+}
 export class EventsMapped {
   startEvent?: StartEvent;
   stopEvent?: StopEvent;
@@ -162,6 +199,53 @@ export class EventsMapped {
 }
 
 
+export function processTextToWasm(text: string): any[] {
+  const lines = text.split(/\r\n|\n/)
+  const linesCount = lines.length
+  const eventsMappedVec: EventsData[] = []
+  let eventsMapped = new EventsData()
+  let hasStarted = false
+  lines.forEach((line, lineIdx) => {
+    const eventData = processLineEvent(line)
+    if(eventData) {
+      switch (eventData.type) {
+        case 'start':
+          if (hasStarted) {
+            eventsMappedVec.push(eventsMapped)
+            eventsMapped = new EventsData()
+            eventsMapped.start = eventData
+          } else {
+            eventsMapped.start = eventData
+            hasStarted = true
+          }
+          break;
+        case 'span':
+          eventsMapped.span = eventData
+          break;
+        case 'data':
+          if (hasStarted) {
+            eventsMapped.addDataEvent(eventData)
+          }
+          break;
+        case 'stop':
+          eventsMapped.stop = eventData
+          eventsMappedVec.push(eventsMapped)
+          eventsMapped = new EventsData()
+          hasStarted = false;
+          break;
+        default:
+          break;
+      }
+    }
+    if (lineIdx === linesCount) {
+      if (eventsMapped.start) {
+        eventsMappedVec.push(eventsMapped)
+      }
+      eventsMapped =  new EventsData()
+    }
+  })
+  return eventsMappedVec
+}
 
 export function processText(text: string): EventsMapped[] {
   const lines = text.split(/\r\n|\n/)
@@ -274,3 +358,4 @@ export function convertToStrictJSON(jsonString: string): string {
     // replacing single quote wrapped ones to double quote 
     .replace(/'([^']+)'/g, function(_, $1){return '"'+$1+'"'})
 }
+
