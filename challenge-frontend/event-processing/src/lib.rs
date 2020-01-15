@@ -1,5 +1,5 @@
 use serde::{Deserialize, Serialize};
-use serde_json::{Map, Value, json, Error};
+use serde_json::{Map, Value, json};
 use std::collections::HashMap;
 use wasm_bindgen::prelude::*;
 
@@ -33,11 +33,11 @@ extern crate lazy_static;
 //     }
 // }
 // A macro to provide `println!(..)`-style syntax for `console.log` logging.
-macro_rules! log {
-    ( $( $t:tt )* ) => {
-        web_sys::console::log_1(&format!( $( $t )* ).into());
-    }
- }
+// macro_rules! log {
+//     ( $( $t:tt )* ) => {
+//         web_sys::console::log_1(&format!( $( $t )* ).into());
+//     }
+//  }
 
 // When the `wee_alloc` feature is enabled, use `wee_alloc` as the global
 // allocator.

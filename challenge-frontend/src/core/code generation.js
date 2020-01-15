@@ -18,4 +18,4 @@ function generate(interval, periodo, withSpan = true, os = ['linux', 'windows'],
 }
 
 
-console.log(generate(60000, 100))
+console.log(generate(60000, 10))
