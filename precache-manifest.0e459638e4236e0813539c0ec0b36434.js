@@ -1,10 +1,10 @@
 self.__precacheManifest = (self.__precacheManifest || []).concat([
   {
-    "revision": "2f8934f4d8695081d9a0",
-    "url": "/challenge-chart-plot/ae149f61d7bc9dade6f5.module.wasm"
+    "revision": "699427ca0480816b56c4",
+    "url": "/challenge-chart-plot/fea735692c54e0af0ec5.module.wasm"
   },
   {
-    "revision": "dbbf420c09c19531589e0b346eca29cc",
+    "revision": "0f294ca89880483822da868a7615d39b",
     "url": "/challenge-chart-plot/index.html"
   },
   {
@@ -16,15 +16,15 @@ self.__precacheManifest = (self.__precacheManifest || []).concat([
     "url": "/challenge-chart-plot/static/js/2.dbce843f.chunk.js"
   },
   {
-    "revision": "2f8934f4d8695081d9a0",
-    "url": "/challenge-chart-plot/static/js/3.51befeaf.chunk.js"
+    "revision": "699427ca0480816b56c4",
+    "url": "/challenge-chart-plot/static/js/3.7278b9a9.chunk.js"
   },
   {
     "revision": "0f0b980ebb497150f3da",
     "url": "/challenge-chart-plot/static/js/main.9add4f58.chunk.js"
   },
   {
-    "revision": "6d7a9a0b865201cbdf16",
-    "url": "/challenge-chart-plot/static/js/runtime-main.a9ac71e0.js"
+    "revision": "c49ecf813e795a3176d2",
+    "url": "/challenge-chart-plot/static/js/runtime-main.4c16bc84.js"
   }
 ]);
