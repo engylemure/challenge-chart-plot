@@ -2,13 +2,13 @@ use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value, json};
 use std::collections::HashMap;
 use wasm_bindgen::prelude::*;
-
 pub mod utils;
 
 //pub mod benches;
 
 use utils::*;
 use splines::{Key, Interpolation, Spline};
+use std::collections::hash_map::Entry;
 
 #[macro_use]
 extern crate lazy_static;
@@ -41,9 +41,9 @@ extern crate lazy_static;
 
 // When the `wee_alloc` feature is enabled, use `wee_alloc` as the global
 // allocator.
-#[cfg(feature = "wee_alloc")]
-#[global_allocator]
-static ALLOC: wee_alloc::WeeAlloc = wee_alloc::WeeAlloc::INIT;
+// #[cfg(feature = "wee_alloc")]
+// #[global_allocator]
+// static ALLOC: wee_alloc::WeeAlloc = wee_alloc::WeeAlloc::INIT;
 
 /// struct used for storing the Event Data from the type 'start'
 #[wasm_bindgen]
@@ -248,28 +248,6 @@ impl From<Map<String,Value>> for Event {
     }
 }
 
-#[wasm_bindgen]
-#[derive(Debug, Clone)]
-pub struct EventsData {
-    data_events: Vec<DataValue>,
-    span: Option<SpanValue>,
-    start: Option<StartValue>,
-    stop: Option<StopValue>,
-    group_map: HashMap<String, Vec<(String, Groupable)>>,
-}
-
-impl Default for EventsData {
-    fn default() -> EventsData {
-        EventsData {
-            data_events: Vec::new(),
-            span: None,
-            start: None,
-            stop: None,
-            group_map: HashMap::new(),
-        }
-    }
-}
-
 fn datasets_interpolated(datasets: Vec<DataSet>, should_interpolate: bool, interpolate_interval: u64) -> Vec<DataSet> {
     datasets.iter().map(|d| {
         if should_interpolate && d.points.len() > (interpolate_interval as usize) {
@@ -299,40 +277,135 @@ fn datasets_interpolated(datasets: Vec<DataSet>, should_interpolate: bool, inter
 }
 
 #[wasm_bindgen]
-impl EventsData {
-    pub fn process_text(text: &str) -> JsValue {
-       let (events_data, _) = EventsData::from_text(text);
-       let datasets: Vec<Vec<DataSet>> = events_data.iter().map(|v| v.dataset_from_events_data()).collect();
-       serde_wasm_bindgen::to_value(&datasets).unwrap() 
-    }
+#[derive(Debug, Clone)]
+pub struct EventProcessor;
 
+#[wasm_bindgen]
+#[derive(Debug, Clone)]
+pub struct EventsData {
+    data_events: Vec<DataValue>,
+    span: Option<SpanValue>,
+    start: Option<StartValue>,
+    stop: Option<StopValue>,
+    group_map: HashMap<String, Vec<(String, Groupable)>>,
+}
 
-    pub fn process_js_value(value: JsValue, should_interpolate: bool, interpolate_interval: u64) -> JsValue {
-        match value.into_serde::<Value>() {
-            Ok(serde_value) => match serde_value {
-                Value::Array(values) => {
-                    let mut events_data_vec: Vec<EventsData> = Vec::new();
-                    for value in values.iter().cloned() {
-                        if let Value::Object(map) = value {
-                            events_data_vec.push(EventsData::from(map))
-                        }
-                    }
-                    let datasets: Vec<Vec<DataSet>> = events_data_vec.iter().map(|v| datasets_interpolated(v.dataset_from_events_data(), should_interpolate, interpolate_interval)).collect();
-                    serde_wasm_bindgen::to_value(&datasets).unwrap()
-                },
-                Value::Object(value) => {
-                    let events_data = vec![EventsData::from(value)];
-                    let datasets: Vec<Vec<DataSet>> = events_data.iter().map(|v| {
-                        datasets_interpolated(v.dataset_from_events_data(), should_interpolate, interpolate_interval)
-                    }).collect();
-                    serde_wasm_bindgen::to_value(&datasets).unwrap()
-                },
-                _ => JsValue::NULL
-            },
-            Err(_) => JsValue::NULL,
+impl Default for EventsData {
+    fn default() -> EventsData {
+        EventsData {
+            data_events: Vec::new(),
+            span: None,
+            start: None,
+            stop: None,
+            group_map: HashMap::new(),
         }
     }
 }
+
+#[wasm_bindgen]
+impl EventsData {
+    fn insert_in_group_map(&mut self, value: (String, Groupable)) {
+        match self.group_map.entry(value.0.clone()) {
+            Entry::Occupied(o) => {
+                let arr = o.into_mut();
+                if !arr.contains(&value) {
+                    arr.push(value);
+                }
+            },
+            Entry::Vacant(v) => {
+                v.insert(vec![value]);
+            },
+        };
+    }
+
+    fn add_data_value(&mut self, data_value: DataValue) {
+        if let Some(start) = self.start.clone() {
+            if let Some(group) = &start.group {
+                for g in group.iter() {
+                    if let Some(data) = data_value.data.get(g) {
+                        let option = match data {
+                            Value::Bool(b) => Some(Groupable::Bool(*b)),
+                            Value::Null => Some(Groupable::Null),
+                            Value::Number(n) => match n.as_f64() {
+                                Some(n) => Some(Groupable::Number(n)),
+                                None => None,
+                            },
+                            Value::String(s) => Some(Groupable::String(s.clone())),
+                            _ => None
+                        };
+                        if let Some(value) = option {
+                            self.insert_in_group_map((g.clone(), value))
+                        }
+                    }
+                }
+            }
+        }
+        self.data_events.push(data_value)
+    }
+
+    fn dataset_from_events_data(&self) -> Vec<DataSet> {
+        if let Some(start) = &self.start {
+            if let Some(select) = &start.select {
+                if select.len() > 0 {
+                    let group: Vec<Vec<(String, Groupable)>> =
+                        self.group_map.values().map(|v| v.clone()).collect();
+                    let mut datasets: Vec<DataSet> = {
+                        let mut sets: Vec<DataSet> = Vec::new();
+                        if group.len() > 0 {
+                            let groups = cartesian_product(group);
+                            for s in select {
+                                let mut set_group: Vec<DataSet> = groups
+                                    .iter()
+                                    .map(|v| DataSet::new(s.into(), v.clone(), Vec::new()))
+                                    .collect();
+                                sets.append(&mut set_group)
+                            }
+                        } else {
+                            for s in select {
+                                sets.push(DataSet::new(s.into(), Vec::new(), Vec::new()))
+                            }
+                        }
+                        sets
+                    };
+                    self.insert_points_in_data_sets(&mut datasets);
+                    return datasets;
+                }
+            }
+        }
+        Vec::new()
+    }
+
+    fn insert_points_in_data_sets(&self, datasets: &mut Vec<DataSet>) {
+        let mut stop_timestamp: u64 = 0;
+        let mut span_begin_timestamp: u64 = 0;
+        let mut span_end_timestamp: u64 = 0;
+        let has_span = if let Some(span_value) = &self.span {
+            span_begin_timestamp = span_value.begin;
+            span_end_timestamp = span_value.end;
+            true
+        } else {
+            false
+        };
+        let has_stop = if let Some(stop_value) = &self.stop {
+            stop_timestamp = stop_value.timestamp;
+            true
+        } else {
+            false
+        };
+        for data in &self.data_events {
+            for d in datasets.iter_mut() {
+                if let Some(point) = Point::from(&data, &d.selection, &d.group) {
+                    let is_in_interval = !has_stop || (stop_timestamp >= point.timestamp);
+                    let is_in_span = !has_span || (point.timestamp >= span_begin_timestamp && point.timestamp <= span_end_timestamp);
+                    if is_in_interval && is_in_span {
+                        d.points.push(point);
+                    }
+                };
+            }
+        }
+    }
+}
+
 
 impl From<Map<String, Value>> for EventsData {
     fn from(map: Map<String, Value>) -> EventsData {
@@ -354,180 +427,64 @@ impl From<Map<String, Value>> for EventsData {
     }
 }
 
-impl EventsData {
-    fn from_text(text: &str) -> (Vec<EventsData>, usize) {
-        // let _timer = Timer::new("Events::from_text");
-        let mut events_vec: Vec<EventsData> = Vec::new();
+#[wasm_bindgen]
+impl EventProcessor {
+    fn initial_processing(text: &str, should_fix_json: bool) -> Vec<EventsData> {
+        let mut data : Vec<EventsData> = Vec::new();
         let mut events = EventsData::default();
-        let mut number_of_lines: usize = 0;
         let mut has_started = false;
-        {
-            // let _timer1 = Timer::new("Events::from_text#line_loop");
-            for line in text.lines() {
-                number_of_lines += 1;
-                let string_line = fix_non_strict_json(line);
-                let v: Value = match serde_json::from_str(string_line.as_ref()) {
-                    Ok(result) => result,
-                    _ => Value::Null,
-                };
-                let event = match v {
-                    Value::Object(map) => Event::from(map),
-                    _ => Event::Unknown,
-                };
-                match event {
-                    Event::Stop(stop_value) => {
-                        events.stop = Some(stop_value);
-                        events_vec.push(events);
-                        events = EventsData::default();
-                        number_of_lines = 0;
-                        has_started = false;
-                    }
-                    Event::Start(start_value) => {
-                        if has_started {
-                            events_vec.push(events);
+        for line in text.lines() {
+            let line = if should_fix_json {
+                fix_non_strict_json(line)
+            } else {
+                line.to_string()
+            };
+            if let Ok(v) = serde_json::from_str(&line) {
+                if let Value::Object(map) = v {
+                    match Event::from(map) {
+                        Event::Stop(stop) => {
+                            events.stop = Some(stop);
+                            data.push(events);
                             events = EventsData::default();
-                            events.start = Some(start_value);
-                            number_of_lines = 1;
-                        } else {
-                            events.start = Some(start_value);
-                            has_started = true;
+                            has_started = false;
                         }
-                    }
-                    Event::Span(span_value) => {
-                        events.span = Some(span_value);
-                    }
-                    Event::Data(data_value) => {
-                        if has_started {
-                            events.add_data_value(data_value);
+                        Event::Start(start) => {
+                            if has_started {
+                                data.push(events);
+                                events = EventsData::default();
+                                events.start = Some(start);
+                            } else {
+                                events.start = Some(start);
+                                has_started = true;
+                            }
                         }
-                    }
-                    Event::Unknown => {}
-                };
+                        Event::Span(span) => {
+                            events.span = Some(span);
+                        }
+                        Event::Data(data) => {
+                            if has_started {
+                                events.add_data_value(data)
+                            }
+                        }
+                        _ => ()
+                    };
+                }
             }
         }
         if let Some(_) = events.start {
-            events_vec.push(events)
+            data.push(events)
         };
-        (events_vec, number_of_lines)
+        data
     }
 
-    fn add_data_value(&mut self, data_value: DataValue) {
-        if let Some(start) = self.start.clone() {
-            if let Some(group) = &start.group {
-                for g in group {
-                    let g_option = match data_value.data.get(g) {
-                        Some(data) => match data {
-                            Value::Bool(b) => Some(Groupable::Bool(*b)),
-                            Value::Null => Some(Groupable::Null),
-                            Value::Number(n) => match n.as_f64() {
-                                Some(n) => Some(Groupable::Number(n)),
-                                None => None,
-                            },
-                            Value::String(s_) => Some(Groupable::String(s_.clone())),
-                            _ => None,
-                        },
-                        None => None,
-                    };
-                    if let Some(value) = g_option {
-                        self.insert_in_group_map((g.to_string(), value))
-                    }
-                }
-            }
+    pub fn process(text: &str, should_interpolate: bool, interpolate_interval: u64, should_fix_json: bool) -> JsValue {
+        let initial_data = EventProcessor::initial_processing(text, should_fix_json);
+        let data_sets: Vec<Vec<DataSet>> = initial_data.into_iter().map(
+            |v| datasets_interpolated(v.dataset_from_events_data(), should_interpolate, interpolate_interval)
+        ).collect();
+        match serde_wasm_bindgen::to_value(&data_sets) {
+            Ok(value) => value,
+            Err(_) => JsValue::NULL
         }
-        self.data_events.push(data_value)
-    }
-
-    fn insert_in_group_map(&mut self, value: (String, Groupable)) {
-        let group_key = &value.0;
-        match self.group_map.get_mut(group_key) {
-            Some(arr) => {
-                if !arr.contains(&value) {
-                    arr.push(value.clone())
-                }
-            }
-            None => {
-                self.group_map
-                    .insert(group_key.clone(), [value.clone()].to_vec());
-            }
-        }
-    }
-
-    fn dataset_from_events_data(&self) -> Vec<DataSet> {
-        if let Some(start_value) = &self.start {
-            if let Some(select) = &start_value.select {
-                if select.len() > 0 {
-                    if let Some(_) = self.start.clone() {
-                        let group_values: Vec<Vec<(String, Groupable)>> =
-                            self.group_map.values().map(|v| v.clone()).collect();
-                        let mut data_sets: Vec<DataSet> = {
-                            let mut sets: Vec<DataSet> = Vec::new();
-                            if group_values.len() > 0 {
-                                let groups = cartesian_product(group_values);
-                                for s in select {
-                                    let mut sets_group: Vec<DataSet> = groups
-                                        .iter()
-                                        .map(|v| DataSet::new(s.into(), v.to_vec(), Vec::new()))
-                                        .collect();
-                                    sets.append(&mut sets_group)
-                                }
-                            } else {
-                                for s in select {
-                                    sets.push(DataSet::new(s.into(), Vec::new(), Vec::new()));
-                                }
-                            }
-                            sets
-                        };
-                        let mut vec_points = self.get_points_from_datasets(&data_sets);
-                        for dataset_idx in 0..data_sets.len() {
-                            data_sets[dataset_idx]
-                                .points
-                                .append(&mut vec_points[dataset_idx])
-                        }
-
-                        return data_sets;
-                    }
-                }
-            }
-        }
-        Vec::new()
-    }
-
-    fn get_points_from_datasets(&self, datasets: &Vec<DataSet>) -> Vec<Vec<Point>> {
-        let mut points: Vec<Vec<Point>> = datasets.iter().map(|_| Vec::new()).collect();
-        let mut stop_timestamp: u64 = 0;
-        let mut span_begin_timestamp: u64 = 0;
-        let mut span_end_timestamp: u64 = 0;
-        let has_span = if let Some(span_value) = &self.span {
-            span_begin_timestamp = span_value.begin;
-            span_end_timestamp = span_value.end;
-            true
-        } else {
-            false
-        };
-        let has_stop = if let Some(stop_value) = &self.stop {
-            stop_timestamp = stop_value.timestamp;
-            true
-        } else {
-            false
-        };
-        for data in &self.data_events {
-            let mut tuple_idx = 0;
-            for d in datasets {
-                if let Some(point) = Point::from(data, &d.selection.to_string(), &d.group) {
-                    if ((has_stop && stop_timestamp >= point.timestamp) || !has_stop)
-                        && ((has_span
-                            && point.timestamp >= span_begin_timestamp
-                            && point.timestamp <= span_end_timestamp)
-                            || !has_span)
-                    {
-                        points[tuple_idx].push(point);
-                    }
-                };
-                tuple_idx += 1;
-            }
-        }
-        points
     }
 }
-
-

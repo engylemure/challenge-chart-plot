@@ -11,6 +11,7 @@ pub fn set_panic_hook() {
     console_error_panic_hook::set_once();
 }
 
+
 /// Function for parsing some non strict JSON lines into strict JSON format.
 pub fn fix_non_strict_json(line: &str) -> String {
     lazy_static! {

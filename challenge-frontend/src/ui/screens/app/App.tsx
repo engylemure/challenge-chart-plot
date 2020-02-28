@@ -54,7 +54,7 @@ function App() {
     if (text && wasm) {
       const [withoutWasmResult,,, withoutElapsedTime] = measureTime(() => processEventsMapped(processText(text)), 'without wasm')
       const [withWasmResult,,, withElapsedTime] = measureTime(() => {
-        return wasm.EventsData.process_js_value(processTextToWasm(text), shouldInterpolate, BigInt(interpolateInterval))
+        return wasm.EventProcessor.process(text, shouldInterpolate, BigInt(interpolateInterval), true)
       }, 'with wasm')
       setData(processEvents(withWasmResult))
       // setData(withWasmResult)
